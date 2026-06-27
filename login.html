@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enter the Pack — Awaken Wolves</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{--dark:#06060a;--red:#cc1100;--blood:#8b0000;--silver:#8a96a3;--panel:#0d0d14}
+html,body{width:100%;height:100%;overflow:hidden}
+body{
+  background:var(--dark);
+  font-family:'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif;
+  color:#e0e0e0;display:flex;align-items:center;justify-content:center;
+  position:relative;min-height:100vh;
+}
+#bg{position:fixed;inset:0;z-index:0}
+.moon{
+  position:fixed;top:-80px;right:60px;
+  width:200px;height:200px;border-radius:50%;
+  background:radial-gradient(circle at 38% 35%,#c83000 0%,#8b0000 45%,#3d0000 80%,#1a0000 100%);
+  box-shadow:0 0 60px 20px rgba(180,20,0,0.35),0 0 120px 40px rgba(180,10,0,0.12);
+  z-index:1;animation:mp 5s ease-in-out infinite;
+}
+@keyframes mp{
+  0%,100%{box-shadow:0 0 60px 20px rgba(180,20,0,0.35),0 0 120px 40px rgba(180,10,0,0.12)}
+  50%{box-shadow:0 0 80px 30px rgba(200,20,0,0.5),0 0 160px 60px rgba(180,10,0,0.18)}
+}
+.mist{position:fixed;bottom:0;left:0;width:100%;height:160px;
+  background:linear-gradient(to top,rgba(80,5,5,0.25),transparent);z-index:1;pointer-events:none}
+
+.card{
+  position:relative;z-index:10;
+  background:rgba(13,13,20,0.88);
+  border:1px solid rgba(204,17,0,0.2);
+  border-radius:8px;padding:48px 52px;
+  display:flex;flex-direction:column;align-items:center;gap:20px;
+  backdrop-filter:blur(12px);
+  box-shadow:0 0 60px rgba(0,0,0,0.7),0 0 30px rgba(180,0,0,0.12);
+  min-width:360px;
+}
+.wolf-icon{
+  width:72px;height:72px;
+  filter:drop-shadow(0 0 12px rgba(200,0,0,0.6));
+}
+.card-title{
+  font-size:1.4rem;letter-spacing:.3em;text-transform:uppercase;
+  background:linear-gradient(135deg,#fff 0%,#cc1100 50%,#ff5500 100%);
+  background-size:200% auto;
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  animation:shimmer 4s linear infinite;
+}
+@keyframes shimmer{to{background-position:200% center}}
+.deco{width:180px;height:1px;background:linear-gradient(90deg,transparent,rgba(204,17,0,0.4),transparent)}
+.form{display:flex;flex-direction:column;gap:14px;width:100%}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-size:.68rem;letter-spacing:.2em;text-transform:uppercase;color:var(--silver)}
+.field input{
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(204,17,0,0.2);border-radius:3px;
+  color:#e0e0e0;padding:12px 16px;font-size:.9rem;
+  font-family:inherit;outline:none;transition:border-color .25s,box-shadow .25s;
+}
+.field input::placeholder{color:rgba(138,150,163,0.5)}
+.field input:focus{border-color:rgba(204,17,0,0.55);box-shadow:0 0 0 2px rgba(204,17,0,0.12)}
+.submit-btn{
+  margin-top:6px;padding:14px;
+  font-size:.9rem;font-weight:700;letter-spacing:.18em;
+  text-transform:uppercase;color:#fff;
+  background:linear-gradient(135deg,#8b0000,#cc1100);
+  border:none;border-radius:3px;cursor:pointer;
+  position:relative;overflow:hidden;transition:all .3s;
+}
+.submit-btn::after{
+  content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.08),transparent);
+  transition:left .5s;
+}
+.submit-btn:hover::after{left:100%}
+.submit-btn:hover{background:linear-gradient(135deg,#cc1100,#ff4400);box-shadow:0 0 30px rgba(200,0,0,0.6)}
+.back{font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--silver);text-decoration:none;transition:color .2s}
+.back:hover{color:#cc1100}
+</style>
+</head>
+<body>
+<div class="moon"></div>
+<canvas id="bg"></canvas>
+<div class="mist"></div>
+
+<div class="card">
+  <!-- Mini wolf SVG icon -->
+  <svg class="wolf-icon" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="150" cy="148" rx="118" ry="108" fill="#440000" opacity="0.18"/>
+    <path d="M 150 44 C 125 44,95 58,78 86 C 62 112,58 144,64 170 C 70 194,84 212,100 220 C 106 223,112 225,120 224 L 128 218 L 150 215 L 172 218 L 180 224 C 188 225,194 223,200 220 C 216 212,230 194,236 170 C 242 144,238 112,222 86 C 205 58,175 44,150 44 Z" fill="#0d0d14"/>
+    <path d="M 85 82 C 78 64,65 28,75 14 C 80 7,90 7,96 16 C 104 27,106 62,107 80 Z" fill="#0c0c11"/>
+    <path d="M 215 82 C 222 64,235 28,225 14 C 220 7,210 7,204 16 C 196 27,194 62,193 80 Z" fill="#0c0c11"/>
+    <ellipse cx="113" cy="148" rx="23" ry="18" fill="#cc1500"/>
+    <ellipse cx="113" cy="148" rx="7" ry="16" fill="#040404"/>
+    <ellipse cx="187" cy="148" rx="23" ry="18" fill="#cc1500"/>
+    <ellipse cx="187" cy="148" rx="7" ry="16" fill="#040404"/>
+    <path d="M 135 178 C 135 168,165 168,165 178 C 165 191,155 196,150 196 C 145 196,135 191,135 178 Z" fill="#060608"/>
+    <path d="M 118 222 C 108 238,104 255,110 268 C 118 283,133 294,150 296 C 167 294,182 283,190 268 C 196 255,192 238,182 222 C 175 226,164 228,150 228 C 136 228,125 226,118 222 Z" fill="#0d0d14"/>
+    <path d="M 110 216 C 112 250,128 272,150 276 C 172 272,188 250,190 216 C 178 208,165 204,150 204 C 135 204,122 208,110 216 Z" fill="#1c0000"/>
+    <path d="M 116 211 L 111 237 L 123 211" fill="#eaeaea"/>
+    <path d="M 177 211 L 183 237 L 189 211" fill="#eaeaea"/>
+    <path d="M 126 244 C 124 265,138 280,150 282 C 162 280,176 265,174 244 C 167 234,150 230,133 234 Z" fill="#7a0000"/>
+  </svg>
+
+  <h1 class="card-title">Enter the Pack</h1>
+  <div class="deco"></div>
+
+  <form class="form" onsubmit="handleLogin(event)">
+    <div class="field">
+      <label>Email</label>
+      <input type="email" placeholder="wolf@pack.com" required autocomplete="email"/>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" placeholder="••••••••" required/>
+    </div>
+    <button type="submit" class="submit-btn">Enter &nbsp;▴</button>
+  </form>
+
+  <a href="index.html" class="back">← Return to the Den</a>
+</div>
+
+<script>
+function handleLogin(e){
+  e.preventDefault();
+  window.location.href='dashboard.html';
+}
+
+const canvas=document.getElementById('bg');
+const ctx=canvas.getContext('2d');
+function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight}
+resize();window.addEventListener('resize',resize);
+const stars=Array.from({length:180},()=>({x:Math.random(),y:Math.random(),r:Math.random()*1.1+0.2,a:Math.random(),da:(Math.random()*0.006+0.002)*(Math.random()>.5?1:-1)}));
+const embers=Array.from({length:18},()=>({x:Math.random(),y:Math.random(),r:Math.random()*1.5+0.4,a:Math.random()*0.55,da:Math.random()*0.005+0.002,vy:-(Math.random()*0.00025+0.00007)}));
+function draw(){
+  const W=canvas.width,H=canvas.height;ctx.clearRect(0,0,W,H);
+  const g=ctx.createRadialGradient(W*.5,H*.5,0,W*.5,H*.5,W*.75);
+  g.addColorStop(0,'#0e0812');g.addColorStop(1,'#06060a');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  stars.forEach(s=>{s.a+=s.da;if(s.a>1||s.a<0)s.da*=-1;ctx.beginPath();ctx.arc(s.x*W,s.y*H,s.r,0,Math.PI*2);ctx.fillStyle=`rgba(185,190,215,${Math.max(0,Math.min(1,s.a))})`;ctx.fill()});
+  embers.forEach(e=>{e.a+=e.da;if(e.a>0.55||e.a<0)e.da*=-1;e.y+=e.vy;if(e.y<-0.01)e.y=1.02;ctx.beginPath();ctx.arc(e.x*W,e.y*H,e.r,0,Math.PI*2);ctx.fillStyle=`rgba(210,50,0,${Math.max(0,e.a)})`;ctx.fill()});
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>

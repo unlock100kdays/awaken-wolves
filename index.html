@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Awaken Wolves</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --dark:#06060a;--dark2:#0d0d12;
+  --red:#cc1100;--red2:#ff3300;--blood:#8b0000;
+  --silver:#8a96a3;
+}
+html,body{width:100%;height:100%;overflow:hidden}
+body{
+  background:var(--dark);
+  font-family:'Palatino Linotype','Book Antiqua',Palatino,Georgia,serif;
+  color:#e0e0e0;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;min-height:100vh;
+}
+#bg{position:fixed;inset:0;z-index:0}
+.moon{
+  position:fixed;top:-70px;right:70px;
+  width:240px;height:240px;border-radius:50%;
+  background:radial-gradient(circle at 38% 35%,#c83000 0%,#8b0000 45%,#3d0000 80%,#1a0000 100%);
+  box-shadow:0 0 70px 25px rgba(180,20,0,0.4),0 0 130px 50px rgba(180,10,0,0.15);
+  z-index:1;animation:moonBreath 5s ease-in-out infinite;
+}
+@keyframes moonBreath{
+  0%,100%{box-shadow:0 0 70px 25px rgba(180,20,0,0.4),0 0 130px 50px rgba(180,10,0,0.15)}
+  50%{box-shadow:0 0 90px 35px rgba(200,20,0,0.55),0 0 170px 70px rgba(180,10,0,0.2)}
+}
+.mist{
+  position:fixed;bottom:0;left:0;width:100%;height:180px;
+  background:linear-gradient(to top,rgba(80,5,5,0.3),transparent);
+  z-index:1;pointer-events:none;
+}
+.scene{
+  position:relative;z-index:10;
+  display:flex;flex-direction:column;align-items:center;
+  gap:12px;text-align:center;padding:20px;
+}
+.wolf-wrap{
+  width:290px;height:290px;
+  filter:drop-shadow(0 0 22px rgba(180,0,0,0.55));
+  animation:wolfBreath 3.5s ease-in-out infinite;
+}
+@keyframes wolfBreath{
+  0%,100%{filter:drop-shadow(0 0 18px rgba(180,0,0,0.5));transform:scale(1)}
+  50%{filter:drop-shadow(0 0 48px rgba(220,0,0,0.8));transform:scale(1.025)}
+}
+.brand{
+  font-size:clamp(1.7rem,4.5vw,3.2rem);
+  font-weight:900;letter-spacing:.35em;text-transform:uppercase;
+  background:linear-gradient(135deg,#fff 0%,#e0e0e0 18%,#cc1100 48%,#ff5500 68%,#fff 100%);
+  background-size:300% auto;
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  animation:shimmer 5s linear infinite;
+}
+@keyframes shimmer{to{background-position:300% center}}
+.brand-sub{
+  font-size:.68rem;letter-spacing:.6em;text-transform:uppercase;
+  color:#cc1100;margin-top:-8px;
+}
+.deco{
+  width:220px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(204,17,0,0.45),transparent);
+}
+.enter-btn{
+  display:inline-block;padding:17px 46px;
+  font-size:.95rem;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:#fff;text-decoration:none;
+  background:linear-gradient(135deg,#8b0000 0%,#cc1100 100%);
+  border:1.5px solid rgba(255,80,40,0.3);border-radius:3px;
+  cursor:pointer;position:relative;overflow:hidden;
+  transition:all .3s ease;margin-top:4px;
+}
+.enter-btn::after{
+  content:'';position:absolute;top:0;left:-100%;
+  width:100%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.08),transparent);
+  transition:left .5s;
+}
+.enter-btn:hover::after{left:100%}
+.enter-btn:hover{
+  background:linear-gradient(135deg,#cc1100,#ff4400);
+  box-shadow:0 0 38px rgba(200,0,0,0.72);
+  transform:translateY(-2px);letter-spacing:.18em;
+}
+.tagline{
+  font-size:.76rem;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--silver);line-height:2.2;max-width:560px;margin-top:2px;
+}
+.tagline em{color:#cc1100;font-style:normal}
+</style>
+</head>
+<body>
+<div class="moon"></div>
+<canvas id="bg"></canvas>
+<div class="mist"></div>
+
+<div class="scene">
+  <div class="wolf-wrap">
+    <svg viewBox="0 0 300 310" xmlns="http://www.w3.org/2000/svg" width="290" height="300">
+      <defs>
+        <filter id="eglow" x="-80%" y="-80%" width="260%" height="260%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="sglow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="8"/>
+        </filter>
+        <radialGradient id="headGrad" cx="50%" cy="42%" r="58%">
+          <stop offset="0%" stop-color="#14141e"/>
+          <stop offset="100%" stop-color="#09090f"/>
+        </radialGradient>
+      </defs>
+
+      <!-- Ambient glow behind head -->
+      <ellipse cx="150" cy="148" rx="118" ry="108" fill="#440000" opacity="0.15"/>
+
+      <!-- SHOULDERS / BODY BASE -->
+      <path d="M 50 310 C 52 278,68 252,88 232 C 100 220,116 212,134 207
+               C 130 218,126 232,124 248 C 120 266,118 286,118 310 Z"
+            fill="#0c0c11"/>
+      <path d="M 250 310 C 248 278,232 252,212 232 C 200 220,184 212,166 207
+               C 170 218,174 232,176 248 C 180 266,182 286,182 310 Z"
+            fill="#0c0c11"/>
+      <path d="M 118 310 C 118 282,126 258,140 240 C 145 232,150 228,150 228
+               C 150 228,155 232,160 240 C 174 258,182 282,182 310 Z"
+            fill="#101018"/>
+
+      <!-- HEAD OUTER SHAPE (includes lower jaw open) -->
+      <path d="M 150 44
+               C 125 44,95 58,78 86 C 62 112,58 144,64 170
+               C 70 194,84 212,100 220 C 106 223,112 225,120 224
+               L 128 218 L 150 215 L 172 218 L 180 224
+               C 188 225,194 223,200 220
+               C 216 212,230 194,236 170
+               C 242 144,238 112,222 86
+               C 205 58,175 44,150 44 Z"
+            fill="url(#headGrad)"/>
+
+      <!-- OPEN LOWER JAW -->
+      <path d="M 118 222 C 108 238,104 255,110 268
+               C 118 283,133 294,150 296
+               C 167 294,182 283,190 268
+               C 196 255,192 238,182 222
+               C 175 226,164 228,150 228
+               C 136 228,125 226,118 222 Z"
+            fill="#0d0d14"/>
+
+      <!-- LEFT EAR OUTER -->
+      <path d="M 85 82 C 78 64,65 28,75 14 C 80 7,90 7,96 16
+               C 104 27,106 62,107 80 Z"
+            fill="#0c0c11"/>
+      <!-- LEFT EAR INNER -->
+      <path d="M 87 78 C 81 62,70 30,77 18 C 81 12,89 13,94 21
+               C 101 31,103 62,104 77 Z"
+            fill="#2d0606"/>
+
+      <!-- RIGHT EAR OUTER -->
+      <path d="M 215 82 C 222 64,235 28,225 14 C 220 7,210 7,204 16
+               C 196 27,194 62,193 80 Z"
+            fill="#0c0c11"/>
+      <!-- RIGHT EAR INNER -->
+      <path d="M 213 78 C 219 62,230 30,223 18 C 219 12,211 13,206 21
+               C 199 31,197 62,196 77 Z"
+            fill="#2d0606"/>
+
+      <!-- FOREHEAD FUR STRIPES -->
+      <path d="M 150 54 C 147 72,145 86,147 100" stroke="#161622" stroke-width="3.5" fill="none"/>
+      <path d="M 150 54 C 153 72,155 86,153 100" stroke="#161622" stroke-width="3.5" fill="none"/>
+      <!-- CHEEK FUR -->
+      <path d="M 96 125 C 108 120,114 130,109 139" stroke="#161622" stroke-width="2" fill="none"/>
+      <path d="M 93 142 C 106 136,112 148,107 156" stroke="#161622" stroke-width="2" fill="none"/>
+      <path d="M 204 125 C 192 120,186 130,191 139" stroke="#161622" stroke-width="2" fill="none"/>
+      <path d="M 207 142 C 194 136,188 148,193 156" stroke="#161622" stroke-width="2" fill="none"/>
+
+      <!-- MUZZLE AREA (lighter) -->
+      <ellipse cx="150" cy="198" rx="56" ry="40" fill="#111118"/>
+
+      <!-- LEFT EYE GLOW HALO -->
+      <ellipse cx="113" cy="148" rx="32" ry="24" fill="#bb1100" opacity="0.22" filter="url(#eglow)"/>
+      <!-- LEFT EYE IRIS -->
+      <ellipse cx="113" cy="148" rx="23" ry="18" fill="#cc1500"/>
+      <!-- LEFT EYE PUPIL SLIT -->
+      <ellipse cx="113" cy="148" rx="7" ry="16" fill="#040404"/>
+      <!-- LEFT EYE REFLECTIONS -->
+      <ellipse cx="118" cy="141" rx="5" ry="3.5" fill="rgba(255,140,50,0.55)"/>
+      <ellipse cx="110" cy="144" rx="2" ry="2" fill="rgba(255,200,100,0.3)"/>
+
+      <!-- RIGHT EYE GLOW HALO -->
+      <ellipse cx="187" cy="148" rx="32" ry="24" fill="#bb1100" opacity="0.22" filter="url(#eglow)"/>
+      <!-- RIGHT EYE IRIS -->
+      <ellipse cx="187" cy="148" rx="23" ry="18" fill="#cc1500"/>
+      <!-- RIGHT EYE PUPIL SLIT -->
+      <ellipse cx="187" cy="148" rx="7" ry="16" fill="#040404"/>
+      <!-- RIGHT EYE REFLECTIONS -->
+      <ellipse cx="192" cy="141" rx="5" ry="3.5" fill="rgba(255,140,50,0.55)"/>
+      <ellipse cx="184" cy="144" rx="2" ry="2" fill="rgba(255,200,100,0.3)"/>
+
+      <!-- NOSE -->
+      <path d="M 135 178 C 135 168,165 168,165 178 C 165 191,155 196,150 196
+               C 145 196,135 191,135 178 Z"
+            fill="#060608"/>
+      <ellipse cx="142" cy="174" rx="7" ry="4.5" fill="#1c1c1c"/>
+
+      <!-- UPPER LIP LINE -->
+      <path d="M 108 212 C 120 218,135 220,150 220 C 165 220,180 218,192 212"
+            stroke="#060608" stroke-width="2" fill="none"/>
+
+      <!-- MOUTH CAVITY (dark red interior) -->
+      <path d="M 110 216 C 112 250,128 272,150 276
+               C 172 272,188 250,190 216
+               C 178 208,165 204,150 204
+               C 135 204,122 208,110 216 Z"
+            fill="#1c0000"/>
+
+      <!-- TONGUE -->
+      <path d="M 126 244 C 124 265,138 280,150 282
+               C 162 280,176 265,174 244
+               C 167 234,150 230,133 234 Z"
+            fill="#7a0000"/>
+      <path d="M 150 240 L 150 278" stroke="#600000" stroke-width="1.5" fill="none"/>
+
+      <!-- UPPER FANGS (large) -->
+      <path d="M 116 211 L 111 237 L 123 211" fill="#eaeaea"/>
+      <path d="M 177 211 L 183 237 L 189 211" fill="#eaeaea"/>
+      <!-- UPPER SMALL TEETH -->
+      <path d="M 129 210 L 126 222 L 134 210" fill="#ddd"/>
+      <path d="M 141 209 L 139 220 L 147 209" fill="#ddd"/>
+      <path d="M 153 209 L 151 220 L 159 209" fill="#ddd"/>
+      <path d="M 165 210 L 163 222 L 171 210" fill="#ddd"/>
+
+      <!-- LOWER FANGS -->
+      <path d="M 118 272 L 115 254 L 125 272" fill="#e5e5e5"/>
+      <path d="M 175 272 L 178 254 L 185 272" fill="#e5e5e5"/>
+      <!-- LOWER SMALL TEETH -->
+      <path d="M 131 276 L 129 260 L 137 276" fill="#d8d8d8"/>
+      <path d="M 144 278 L 142 263 L 149 278" fill="#d8d8d8"/>
+      <path d="M 157 278 L 155 263 L 162 278" fill="#d8d8d8"/>
+      <path d="M 169 276 L 167 260 L 175 276" fill="#d8d8d8"/>
+
+    </svg>
+  </div>
+
+  <div class="deco"></div>
+  <h1 class="brand">The Awaken Wolves</h1>
+  <p class="brand-sub">▴ &nbsp; P A C K &nbsp; · &nbsp; P O W E R &nbsp; · &nbsp; P R E D A T O R &nbsp; ▴</p>
+  <div class="deco"></div>
+
+  <a href="login.html" class="enter-btn">Welcome to the Deadly Wolves World</a>
+
+  <p class="tagline">
+    The Wolves never sleep &nbsp;·&nbsp; <em>Hunger in Eyes</em><br>
+    Cold-Blooded &amp; Always Ready to Attack
+  </p>
+</div>
+
+<script>
+const canvas = document.getElementById('bg');
+const ctx = canvas.getContext('2d');
+
+function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight}
+resize();
+window.addEventListener('resize',resize);
+
+const stars = Array.from({length:200},()=>({
+  x:Math.random(),y:Math.random(),
+  r:Math.random()*1.2+0.2,
+  a:Math.random(),
+  da:(Math.random()*0.007+0.002)*(Math.random()>.5?1:-1)
+}));
+
+const embers = Array.from({length:22},()=>({
+  x:Math.random(),y:Math.random(),
+  r:Math.random()*1.6+0.4,
+  a:Math.random()*0.65,
+  da:Math.random()*0.006+0.002,
+  vy:-(Math.random()*0.00028+0.00008)
+}));
+
+function draw(){
+  const W=canvas.width,H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+
+  const grad=ctx.createRadialGradient(W*.5,H*.55,0,W*.5,H*.55,W*.8);
+  grad.addColorStop(0,'#0e0812');grad.addColorStop(1,'#06060a');
+  ctx.fillStyle=grad;ctx.fillRect(0,0,W,H);
+
+  const mg=ctx.createRadialGradient(W*.88,-50,0,W*.88,-50,420);
+  mg.addColorStop(0,'rgba(110,8,0,0.14)');mg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=mg;ctx.fillRect(0,0,W,H);
+
+  stars.forEach(s=>{
+    s.a+=s.da;if(s.a>1||s.a<0)s.da*=-1;
+    ctx.beginPath();ctx.arc(s.x*W,s.y*H,s.r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(185,190,215,${Math.max(0,Math.min(1,s.a))})`;ctx.fill();
+  });
+
+  embers.forEach(e=>{
+    e.a+=e.da;if(e.a>0.65||e.a<0)e.da*=-1;
+    e.y+=e.vy;if(e.y<-0.01)e.y=1.02;
+    ctx.beginPath();ctx.arc(e.x*W,e.y*H,e.r,0,Math.PI*2);
+    ctx.fillStyle=`rgba(210,50,0,${Math.max(0,e.a)})`;ctx.fill();
+  });
+
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>

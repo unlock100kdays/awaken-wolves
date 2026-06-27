@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pack Command — Awaken Wolves CRM</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --dark:#06060a;--panel:#0d0d14;--panel2:#111118;
+  --red:#cc1100;--blood:#8b0000;--ember:#ff4400;
+  --silver:#8a96a3;--text:#d8d8e0;--border:rgba(204,17,0,0.15);
+  --green:#1a8a44;--orange:#c47a00;
+}
+html,body{width:100%;height:100%;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif;background:var(--dark);color:var(--text)}
+
+/* LAYOUT */
+.shell{display:flex;height:100vh;overflow:hidden}
+
+/* SIDEBAR */
+.sidebar{
+  width:230px;min-width:230px;height:100vh;
+  background:var(--panel);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;gap:0;overflow:hidden;
+}
+.logo{
+  padding:22px 20px 18px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:12px;
+}
+.logo svg{width:36px;height:36px;flex-shrink:0;filter:drop-shadow(0 0 8px rgba(200,0,0,0.5))}
+.logo-text{display:flex;flex-direction:column}
+.logo-name{font-size:.85rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#e0e0e0}
+.logo-tag{font-size:.58rem;letter-spacing:.15em;text-transform:uppercase;color:var(--red)}
+.nav{display:flex;flex-direction:column;padding:14px 0;flex:1}
+.nav-section{font-size:.6rem;letter-spacing:.2em;text-transform:uppercase;color:var(--silver);padding:14px 20px 6px;opacity:.6}
+.nav-item{
+  display:flex;align-items:center;gap:12px;padding:10px 20px;
+  font-size:.82rem;color:var(--silver);cursor:pointer;
+  border-left:2px solid transparent;transition:all .2s;text-decoration:none;
+}
+.nav-item:hover,.nav-item.active{color:var(--text);border-left-color:var(--red);background:rgba(204,17,0,0.07)}
+.nav-item.active{color:#e0e0e0}
+.nav-icon{width:15px;height:15px;opacity:.7;flex-shrink:0}
+.sidebar-footer{
+  padding:16px 20px;border-top:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;
+}
+.avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#8b0000,#cc1100);display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;color:#fff;flex-shrink:0}
+.user-info{display:flex;flex-direction:column}
+.user-name{font-size:.78rem;font-weight:600;color:var(--text)}
+.user-role{font-size:.62rem;color:var(--silver)}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+
+/* TOP BAR */
+.topbar{
+  padding:14px 28px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--panel);flex-shrink:0;
+}
+.topbar-left{display:flex;flex-direction:column}
+.page-title{font-size:1.1rem;font-weight:700;letter-spacing:.06em;color:#e8e8e8}
+.page-sub{font-size:.7rem;color:var(--silver);margin-top:2px;letter-spacing:.06em}
+.topbar-right{display:flex;align-items:center;gap:14px}
+.search{
+  background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:4px;
+  padding:8px 14px;font-size:.8rem;color:var(--text);outline:none;width:220px;
+}
+.search::placeholder{color:rgba(138,150,163,0.45)}
+.search:focus{border-color:rgba(204,17,0,0.35)}
+.notif{
+  width:34px;height:34px;border-radius:4px;border:1px solid var(--border);
+  background:rgba(255,255,255,0.03);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;position:relative;color:var(--silver);font-size:1rem;transition:border-color .2s;
+}
+.notif:hover{border-color:rgba(204,17,0,0.35)}
+.notif-dot{position:absolute;top:7px;right:7px;width:6px;height:6px;border-radius:50%;background:var(--red)}
+
+/* CONTENT AREA */
+.content{flex:1;overflow-y:auto;padding:24px 28px;display:flex;flex-direction:column;gap:22px}
+.content::-webkit-scrollbar{width:5px}
+.content::-webkit-scrollbar-track{background:transparent}
+.content::-webkit-scrollbar-thumb{background:rgba(204,17,0,0.25);border-radius:3px}
+
+/* STATS ROW */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.stat-card{
+  background:var(--panel);border:1px solid var(--border);border-radius:6px;
+  padding:20px 22px;display:flex;flex-direction:column;gap:8px;
+  position:relative;overflow:hidden;transition:border-color .2s;
+}
+.stat-card:hover{border-color:rgba(204,17,0,0.35)}
+.stat-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--red),transparent);
+  opacity:0;transition:opacity .2s;
+}
+.stat-card:hover::before{opacity:1}
+.stat-label{font-size:.65rem;letter-spacing:.18em;text-transform:uppercase;color:var(--silver)}
+.stat-value{font-size:1.9rem;font-weight:700;color:#e8e8e8;line-height:1}
+.stat-delta{font-size:.7rem;display:flex;align-items:center;gap:4px}
+.stat-delta.up{color:var(--green)}
+.stat-delta.down{color:var(--red)}
+.stat-delta.warn{color:var(--orange)}
+.stat-icon{position:absolute;right:18px;top:50%;transform:translateY(-50%);font-size:1.6rem;opacity:.12}
+
+/* MID ROW */
+.mid-row{display:grid;grid-template-columns:1fr 340px;gap:16px}
+
+/* TABLE PANEL */
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.panel-header{
+  padding:16px 20px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.panel-title{font-size:.8rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text)}
+.panel-action{
+  font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--red);cursor:pointer;border:1px solid rgba(204,17,0,0.3);
+  border-radius:3px;padding:5px 12px;transition:all .2s;background:none;
+}
+.panel-action:hover{background:rgba(204,17,0,0.1)}
+table{width:100%;border-collapse:collapse}
+th{
+  font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--silver);padding:10px 20px;text-align:left;
+  border-bottom:1px solid var(--border);background:rgba(255,255,255,0.015);
+}
+td{padding:11px 20px;font-size:.8rem;border-bottom:1px solid rgba(255,255,255,0.04)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(204,17,0,0.04)}
+.badge{
+  display:inline-block;padding:2px 9px;border-radius:20px;
+  font-size:.62rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+}
+.badge-hot{background:rgba(204,17,0,0.18);color:#ff5533;border:1px solid rgba(204,17,0,0.3)}
+.badge-warm{background:rgba(196,122,0,0.18);color:#e8a020;border:1px solid rgba(196,122,0,0.3)}
+.badge-cold{background:rgba(138,150,163,0.12);color:var(--silver);border:1px solid rgba(138,150,163,0.2)}
+.badge-won{background:rgba(26,138,68,0.18);color:#22c55e;border:1px solid rgba(26,138,68,0.3)}
+
+/* ACTIVITY FEED */
+.activity-list{padding:0;display:flex;flex-direction:column}
+.activity-item{
+  padding:14px 20px;border-bottom:1px solid rgba(255,255,255,0.04);
+  display:flex;gap:12px;align-items:flex-start;
+}
+.activity-item:last-child{border-bottom:none}
+.act-dot{
+  width:28px;height:28px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:.75rem;margin-top:1px;
+}
+.act-dot.red{background:rgba(204,17,0,0.2);color:var(--red)}
+.act-dot.green{background:rgba(26,138,68,0.2);color:#22c55e}
+.act-dot.orange{background:rgba(196,122,0,0.2);color:#e8a020}
+.act-dot.silver{background:rgba(138,150,163,0.15);color:var(--silver)}
+.act-info{flex:1}
+.act-text{font-size:.78rem;color:var(--text);line-height:1.4}
+.act-text strong{color:#e0e0e0}
+.act-time{font-size:.65rem;color:var(--silver);margin-top:3px}
+
+/* PIPELINE ROW */
+.pipeline-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.pipe-col{background:var(--panel);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.pipe-head{
+  padding:10px 14px;font-size:.65rem;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--silver);border-bottom:1px solid var(--border);
+  display:flex;justify-content:space-between;align-items:center;
+}
+.pipe-count{background:rgba(204,17,0,0.15);color:var(--red);padding:2px 7px;border-radius:10px;font-size:.65rem;font-weight:700}
+.pipe-deal{
+  margin:10px;background:var(--panel2);border-radius:4px;padding:10px 12px;
+  border-left:3px solid var(--red);font-size:.75rem;cursor:pointer;
+  transition:border-color .2s,background .2s;
+}
+.pipe-deal:hover{background:rgba(204,17,0,0.07);border-left-color:#ff4400}
+.deal-name{font-weight:600;color:var(--text);margin-bottom:4px}
+.deal-val{font-size:.68rem;color:var(--silver)}
+.deal-val span{color:var(--red);font-weight:600}
+
+/* WOLF WATERMARK */
+.watermark{
+  position:fixed;bottom:20px;right:20px;z-index:0;
+  opacity:.03;pointer-events:none;
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="150" cy="148" rx="118" ry="108" fill="#440000" opacity="0.2"/>
+        <path d="M 150 44 C 125 44,95 58,78 86 C 62 112,58 144,64 170 C 70 194,84 212,100 220 C 106 223,112 225,120 224 L 128 218 L 150 215 L 172 218 L 180 224 C 188 225,194 223,200 220 C 216 212,230 194,236 170 C 242 144,238 112,222 86 C 205 58,175 44,150 44 Z" fill="#0d0d14"/>
+        <path d="M 85 82 C 78 64,65 28,75 14 C 80 7,90 7,96 16 C 104 27,106 62,107 80 Z" fill="#0c0c11"/>
+        <path d="M 215 82 C 222 64,235 28,225 14 C 220 7,210 7,204 16 C 196 27,194 62,193 80 Z" fill="#0c0c11"/>
+        <ellipse cx="113" cy="148" rx="23" ry="18" fill="#cc1500"/>
+        <ellipse cx="113" cy="148" rx="7" ry="16" fill="#040404"/>
+        <ellipse cx="187" cy="148" rx="23" ry="18" fill="#cc1500"/>
+        <ellipse cx="187" cy="148" rx="7" ry="16" fill="#040404"/>
+        <path d="M 135 178 C 135 168,165 168,165 178 C 165 191,155 196,150 196 C 145 196,135 191,135 178 Z" fill="#060608"/>
+        <path d="M 118 222 C 108 238,104 255,110 268 C 118 283,133 294,150 296 C 167 294,182 283,190 268 C 196 255,192 238,182 222 C 175 226,164 228,150 228 C 136 228,125 226,118 222 Z" fill="#0d0d14"/>
+        <path d="M 110 216 C 112 250,128 272,150 276 C 172 272,188 250,190 216 C 178 208,165 204,150 204 C 135 204,122 208,110 216 Z" fill="#1c0000"/>
+        <path d="M 116 211 L 111 237 L 123 211" fill="#eaeaea"/>
+        <path d="M 177 211 L 183 237 L 189 211" fill="#eaeaea"/>
+        <path d="M 126 244 C 124 265,138 280,150 282 C 162 280,176 265,174 244 C 167 234,150 230,133 234 Z" fill="#7a0000"/>
+      </svg>
+      <div class="logo-text">
+        <span class="logo-name">Awaken Wolves</span>
+        <span class="logo-tag">Pack CRM</span>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <span class="nav-section">Core</span>
+      <a href="#" class="nav-item active">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
+      </a>
+      <a href="#" class="nav-item">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        Leads
+      </a>
+      <a href="#" class="nav-item">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Pipeline
+      </a>
+      <a href="#" class="nav-item">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Deals
+      </a>
+
+      <span class="nav-section">Tools</span>
+      <a href="#" class="nav-item">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Activities
+      </a>
+      <a href="#" class="nav-item">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Reports
+      </a>
+      <a href="#" class="nav-item">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 104.93 19.07M12 2v2M12 20v2M2 12h2M20 12h2"/></svg>
+        Settings
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="avatar">AW</div>
+      <div class="user-info">
+        <span class="user-name">Alpha Wolf</span>
+        <span class="user-role">Pack Leader</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN AREA -->
+  <main class="main">
+    <!-- TOP BAR -->
+    <div class="topbar">
+      <div class="topbar-left">
+        <span class="page-title">Pack Command Center</span>
+        <span class="page-sub">The wolves never sleep — all systems operational</span>
+      </div>
+      <div class="topbar-right">
+        <input class="search" type="text" placeholder="Search leads, deals, contacts…"/>
+        <div class="notif">🔔<span class="notif-dot"></span></div>
+        <div class="avatar" style="width:34px;height:34px;border-radius:4px">AW</div>
+      </div>
+    </div>
+
+    <!-- SCROLLABLE CONTENT -->
+    <div class="content">
+
+      <!-- STATS -->
+      <div class="stats-row">
+        <div class="stat-card">
+          <span class="stat-label">Total Leads</span>
+          <span class="stat-value">1,847</span>
+          <span class="stat-delta up">▲ 12.4% this month</span>
+          <span class="stat-icon">🎯</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Active Deals</span>
+          <span class="stat-value">142</span>
+          <span class="stat-delta up">▲ 8 new today</span>
+          <span class="stat-icon">⚡</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Revenue (MTD)</span>
+          <span class="stat-value">$248K</span>
+          <span class="stat-delta up">▲ 31.2% vs last month</span>
+          <span class="stat-icon">💰</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Win Rate</span>
+          <span class="stat-value">74%</span>
+          <span class="stat-delta warn">▲ 3% above target</span>
+          <span class="stat-icon">🐺</span>
+        </div>
+      </div>
+
+      <!-- LEADS TABLE + ACTIVITY -->
+      <div class="mid-row">
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Hot Leads</span>
+            <button class="panel-action">+ Add Lead</button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Company</th>
+                <th>Value</th>
+                <th>Status</th>
+                <th>Owner</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Marcus Reid</td><td>TechNova Inc.</td><td>$48,000</td><td><span class="badge badge-hot">Hot</span></td><td>J. Wolf</td></tr>
+              <tr><td>Sara Chen</td><td>Apex Digital</td><td>$32,500</td><td><span class="badge badge-hot">Hot</span></td><td>D. Pack</td></tr>
+              <tr><td>Tyler Brooks</td><td>Summit Labs</td><td>$21,000</td><td><span class="badge badge-warm">Warm</span></td><td>J. Wolf</td></tr>
+              <tr><td>Priya Mehta</td><td>CloudCore Ltd</td><td>$65,000</td><td><span class="badge badge-hot">Hot</span></td><td>R. Fang</td></tr>
+              <tr><td>James Liu</td><td>Fusion Media</td><td>$14,800</td><td><span class="badge badge-warm">Warm</span></td><td>D. Pack</td></tr>
+              <tr><td>Alicia Monroe</td><td>RedShift Inc.</td><td>$89,000</td><td><span class="badge badge-won">Won ✓</span></td><td>J. Wolf</td></tr>
+              <tr><td>Derek Nash</td><td>Orion Systems</td><td>$11,200</td><td><span class="badge badge-cold">Cold</span></td><td>R. Fang</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <span class="panel-title">Activity Feed</span>
+          </div>
+          <div class="activity-list">
+            <div class="activity-item">
+              <div class="act-dot red">🔥</div>
+              <div class="act-info">
+                <div class="act-text"><strong>New lead captured</strong> — Marcus Reid via cold outreach</div>
+                <div class="act-time">2 min ago</div>
+              </div>
+            </div>
+            <div class="activity-item">
+              <div class="act-dot green">✓</div>
+              <div class="act-info">
+                <div class="act-text"><strong>Deal closed</strong> — Alicia Monroe · $89,000</div>
+                <div class="act-time">18 min ago</div>
+              </div>
+            </div>
+            <div class="activity-item">
+              <div class="act-dot orange">📞</div>
+              <div class="act-info">
+                <div class="act-text"><strong>Call scheduled</strong> with Priya Mehta for 3:00 PM</div>
+                <div class="act-time">45 min ago</div>
+              </div>
+            </div>
+            <div class="activity-item">
+              <div class="act-dot silver">📧</div>
+              <div class="act-info">
+                <div class="act-text">Follow-up email sent to <strong>Tyler Brooks</strong></div>
+                <div class="act-time">1 hr ago</div>
+              </div>
+            </div>
+            <div class="activity-item">
+              <div class="act-dot red">⚡</div>
+              <div class="act-info">
+                <div class="act-text"><strong>Deal advanced</strong> — Sara Chen moved to Proposal</div>
+                <div class="act-time">2 hr ago</div>
+              </div>
+            </div>
+            <div class="activity-item">
+              <div class="act-dot green">💰</div>
+              <div class="act-info">
+                <div class="act-text"><strong>Payment received</strong> — CloudCore Ltd · $12,000</div>
+                <div class="act-time">3 hr ago</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PIPELINE -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Deal Pipeline</span>
+          <button class="panel-action">View All</button>
+        </div>
+        <div style="padding:16px">
+          <div class="pipeline-row">
+            <div class="pipe-col">
+              <div class="pipe-head">Prospect <span class="pipe-count">12</span></div>
+              <div class="pipe-deal"><div class="deal-name">TechNova Q3</div><div class="deal-val">Value: <span>$48K</span></div></div>
+              <div class="pipe-deal"><div class="deal-name">BlueStar Media</div><div class="deal-val">Value: <span>$22K</span></div></div>
+              <div class="pipe-deal"><div class="deal-name">Orion Systems</div><div class="deal-val">Value: <span>$11K</span></div></div>
+            </div>
+            <div class="pipe-col">
+              <div class="pipe-head">Qualified <span class="pipe-count">8</span></div>
+              <div class="pipe-deal" style="border-left-color:#e8a020"><div class="deal-name">Apex Digital</div><div class="deal-val">Value: <span>$32K</span></div></div>
+              <div class="pipe-deal" style="border-left-color:#e8a020"><div class="deal-name">Summit Labs</div><div class="deal-val">Value: <span>$21K</span></div></div>
+            </div>
+            <div class="pipe-col">
+              <div class="pipe-head">Proposal <span class="pipe-count">6</span></div>
+              <div class="pipe-deal" style="border-left-color:#ff4400"><div class="deal-name">CloudCore Ltd</div><div class="deal-val">Value: <span>$65K</span></div></div>
+              <div class="pipe-deal" style="border-left-color:#ff4400"><div class="deal-name">Fusion Media</div><div class="deal-val">Value: <span>$14K</span></div></div>
+            </div>
+            <div class="pipe-col">
+              <div class="pipe-head">Negotiation <span class="pipe-count">4</span></div>
+              <div class="pipe-deal" style="border-left-color:#cc7700"><div class="deal-name">Vertex Group</div><div class="deal-val">Value: <span>$97K</span></div></div>
+              <div class="pipe-deal" style="border-left-color:#cc7700"><div class="deal-name">SolarWave</div><div class="deal-val">Value: <span>$38K</span></div></div>
+            </div>
+            <div class="pipe-col">
+              <div class="pipe-head">Closed Won <span class="pipe-count" style="background:rgba(26,138,68,0.2);color:#22c55e">9</span></div>
+              <div class="pipe-deal" style="border-left-color:#22c55e"><div class="deal-name">Alicia Monroe</div><div class="deal-val">Value: <span style="color:#22c55e">$89K ✓</span></div></div>
+              <div class="pipe-deal" style="border-left-color:#22c55e"><div class="deal-name">RedShift Inc.</div><div class="deal-val">Value: <span style="color:#22c55e">$54K ✓</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </main>
+</div>
+
+<!-- Watermark -->
+<div class="watermark">
+  <svg viewBox="0 0 300 300" width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+    <path d="M 150 44 C 125 44,95 58,78 86 C 62 112,58 144,64 170 C 70 194,84 212,100 220 L 150 215 L 200 220 C 216 212,230 194,236 170 C 242 144,238 112,222 86 C 205 58,175 44,150 44 Z" fill="white"/>
+    <path d="M 85 82 C 78 64,65 28,75 14 C 80 7,90 7,96 16 C 104 27,106 62,107 80 Z" fill="white"/>
+    <path d="M 215 82 C 222 64,235 28,225 14 C 220 7,210 7,204 16 C 196 27,194 62,193 80 Z" fill="white"/>
+  </svg>
+</div>
+</body>
+</html>
