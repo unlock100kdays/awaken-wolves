@@ -93,7 +93,6 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
    DEPARTMENT CARDS — DARK BLOOD REDESIGN
 ═══════════════════════════════════════════════ */
 .dept-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-.dept-grid .row-2{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:18px}
 
 .dept-card{
   background:#050508;
@@ -210,18 +209,58 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 .card-it    {--gbar:linear-gradient(90deg,transparent,#0044aa,transparent);--gbar-glow:rgba(0,68,170,.5);--spot:rgba(0,50,150,.18);--card-color:#0044aa;--bld:#002266}
 .card-products{--gbar:linear-gradient(90deg,transparent,#aa5500,transparent);--gbar-glow:rgba(170,85,0,.5);--spot:rgba(140,70,0,.18);--card-color:#aa5500;--bld:#7a3a00}
 .card-pl    {--gbar:linear-gradient(90deg,transparent,#006633,transparent);--gbar-glow:rgba(0,102,51,.5);--spot:rgba(0,100,50,.18);--card-color:#006633;--bld:#004422}
+.card-email {--gbar:linear-gradient(90deg,transparent,#880066,transparent);--gbar-glow:rgba(136,0,102,.5);--spot:rgba(120,0,90,.20);--card-color:#880066;--bld:#550044}
 
 .card-vsl   .card-label{color:#aa1100}
 .card-media .card-label{color:#aa4400}
 .card-it    .card-label{color:#0044aa}
 .card-products .card-label{color:#aa5500}
 .card-pl    .card-label{color:#006633}
+.card-email .card-label{color:#880066}
 
 .card-vsl   .card-enter{color:#aa1100}
 .card-media .card-enter{color:#aa4400}
 .card-it    .card-enter{color:#0055cc}
 .card-products .card-enter{color:#aa5500}
 .card-pl    .card-enter{color:#006633}
+.card-email .card-enter{color:#880066}
+
+/* ── BLOOD RIVER text animation ── */
+.hero-name{
+  background:linear-gradient(
+    to bottom,
+    #ff5533 0%,#dd1100 8%,#990000 18%,
+    #550000 30%,#330000 40%,#880000 50%,
+    #dd1100 58%,#ff5533 65%,#dd1100 72%,
+    #880000 82%,#440000 90%,#dd1100 95%,#ff5533 100%
+  );
+  background-size:100% 200%;
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  animation:bloodRiver 1.8s linear infinite;
+  font-size:1.85rem;font-weight:900;letter-spacing:.1em;text-transform:uppercase;
+}
+@keyframes bloodRiver{
+  from{background-position:0 0%}
+  to  {background-position:0 100%}
+}
+
+/* ── CURSOR BLOOD DROPS ── */
+.cursor-blood{
+  position:fixed;pointer-events:none;z-index:99999;
+  border-radius:50% 50% 58% 58%;
+  background:radial-gradient(ellipse at 40% 30%,#ff2200,#880000);
+  box-shadow:0 0 6px rgba(200,0,0,0.5);
+  transform-origin:center top;
+}
+.cursor-trail{
+  position:fixed;pointer-events:none;z-index:99998;
+  border-radius:0 0 2px 2px;
+  background:linear-gradient(to bottom,rgba(160,0,0,.7),rgba(100,0,0,.2),transparent);
+  transform-origin:top center;
+}
+
+/* ── ANIMATED CANVAS in blood-layer ── */
+.anim-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
 
 .den-footer{text-align:center;padding:4px 0 8px;font-size:.62rem;letter-spacing:.3em;text-transform:uppercase;color:rgba(138,150,163,0.25)}
 </style>
@@ -397,46 +436,56 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
           <span class="card-enter">Enter Division</span>
         </div>
 
-        <!-- 3: IT & WORKFORCE -->
+        <!-- 3: EMAIL-MARKETING -->
+        <div class="dept-card card-email" data-spot="rgba(120,0,90,0.20)" data-drip="#550044">
+          <div class="blood-layer" id="bl-email"></div>
+          <div class="spotlight"></div>
+          <div class="drips-con"></div>
+          <span class="card-num">03</span>
+          <div class="card-icon">📧</div>
+          <span class="card-label">Division III</span>
+          <h2 class="card-name">Email-Marketing</h2>
+          <p class="card-tagline">The inbox is our battlefield. Every subject line a blade — every sequence a siege. We write the words that leave them no choice but to submit.</p>
+          <span class="card-enter">Enter Division</span>
+        </div>
+
+        <!-- 4: IT & WORKFORCE -->
         <div class="dept-card card-it" data-spot="rgba(0,50,150,0.18)" data-drip="#002266">
           <div class="blood-layer" id="bl-it"></div>
           <div class="spotlight"></div>
           <div class="drips-con"></div>
-          <span class="card-num">03</span>
+          <span class="card-num">04</span>
           <div class="card-icon">⚙️</div>
-          <span class="card-label">Division III</span>
+          <span class="card-label">Division IV</span>
           <h2 class="card-name">IT & Workforce</h2>
           <p class="card-tagline">The silent pack that powers the predator. Systems that never sleep, infrastructure that never flinches — the iron backbone of the den.</p>
           <span class="card-enter">Enter Division</span>
         </div>
 
-        <!-- ROW 2 -->
-        <div class="row-2">
-          <!-- 4: PRODUCTS -->
-          <div class="dept-card card-products" data-spot="rgba(140,70,0,0.18)" data-drip="#7a3a00">
-            <div class="blood-layer" id="bl-products"></div>
-            <div class="spotlight"></div>
-            <div class="drips-con"></div>
-            <span class="card-num">04</span>
-            <div class="card-icon">🔥</div>
-            <span class="card-label">Division IV</span>
-            <h2 class="card-name">Products</h2>
-            <p class="card-tagline">Forged in fire, priced in blood. Every product we build is a weapon crafted to dominate the market and make the competition extinct.</p>
-            <span class="card-enter">Enter Division</span>
-          </div>
+        <!-- 5: PRODUCTS -->
+        <div class="dept-card card-products" data-spot="rgba(140,70,0,0.18)" data-drip="#7a3a00">
+          <div class="blood-layer" id="bl-products"></div>
+          <div class="spotlight"></div>
+          <div class="drips-con"></div>
+          <span class="card-num">05</span>
+          <div class="card-icon">🔥</div>
+          <span class="card-label">Division V</span>
+          <h2 class="card-name">Products</h2>
+          <p class="card-tagline">Forged in fire, priced in blood. Every product we build is a weapon crafted to dominate the market and make the competition extinct.</p>
+          <span class="card-enter">Enter Division</span>
+        </div>
 
-          <!-- 5: P&L DASHBOARD -->
-          <div class="dept-card card-pl" data-spot="rgba(0,100,50,0.18)" data-drip="#004422">
-            <div class="blood-layer" id="bl-pl"></div>
-            <div class="spotlight"></div>
-            <div class="drips-con"></div>
-            <span class="card-num">05</span>
-            <div class="card-icon">💹</div>
-            <span class="card-label">Division V</span>
-            <h2 class="card-name">P&L Dashboard</h2>
-            <p class="card-tagline">Track the blood. Count the kills. Every number tells the story of a hunt won or a gap to close. Profit is the score — domination is the goal.</p>
-            <span class="card-enter">Enter Division</span>
-          </div>
+        <!-- 6: P&L DASHBOARD -->
+        <div class="dept-card card-pl" data-spot="rgba(0,100,50,0.18)" data-drip="#004422">
+          <div class="blood-layer" id="bl-pl"></div>
+          <div class="spotlight"></div>
+          <div class="drips-con"></div>
+          <span class="card-num">06</span>
+          <div class="card-icon">💹</div>
+          <span class="card-label">Division VI</span>
+          <h2 class="card-name">P&L Dashboard</h2>
+          <p class="card-tagline">Track the blood. Count the kills. Every number tells the story of a hunt won or a gap to close. Profit is the score — domination is the goal.</p>
+          <span class="card-enter">Enter Division</span>
         </div>
 
       </div><!-- /dept-grid -->
@@ -639,6 +688,142 @@ drawSplatter('bl-pl',{
   ],
   spray:[{cx:.5,cy:.38,radius:95,count:30,color:'#004d22'}]
 });
+
+// EMAIL-MARKETING — corner burst top-left + drip trail
+drawSplatter('bl-email',{
+  splatters:[
+    {x:.22,y:.22,r:56,color:'#5a0044',drops:[
+      {x:.38,y:.10,r:15,a:.72},{x:.10,y:.35,r:14,a:.70},{x:.40,y:.28,r:10,a:.65},
+      {x:.08,y:.14,r:9,a:.68},{x:.28,y:.08,r:8,a:.62},{x:.48,y:.18,r:7,a:.60},
+      {x:.16,y:.48,r:8,a:.58}
+    ],drip:{x:.24,y0:.40,y1:.76,w:4}},
+    {x:.80,y:.78,r:26,color:'#440033',drops:[
+      {x:.70,y:.86,r:9,a:.62},{x:.88,y:.70,r:7,a:.58},{x:.64,y:.74,r:6,a:.55}
+    ],drip:null}
+  ],
+  spray:[{cx:.22,cy:.22,radius:88,count:26,color:'#660055'}]
+});
+
+/* ══════════════════════════════════════════════════════
+   ANIMATED BLOOD IN CARDS — continuous falling drops
+══════════════════════════════════════════════════════ */
+function initAnimBlood(containerId, spawnPoints, bloodColor){
+  const container = document.getElementById(containerId);
+  if(!container) return;
+  setTimeout(()=>{
+    const c = document.createElement('canvas');
+    c.className = 'anim-canvas';
+    container.appendChild(c);
+    const W = container.offsetWidth || 300;
+    const H = container.offsetHeight || 220;
+    c.width = W; c.height = H;
+    const ctx = c.getContext('2d');
+    const drops = [];
+
+    function spawnDrop(){
+      const pt = spawnPoints[Math.floor(Math.random()*spawnPoints.length)];
+      drops.push({
+        x: pt.x*W + (Math.random()-.5)*32,
+        y: pt.y*H + (Math.random()-.5)*20,
+        vy: 0.35 + Math.random()*0.55,
+        size: 1.6 + Math.random()*2.6,
+        opacity: 0.45 + Math.random()*0.35,
+        trail: 0,
+      });
+    }
+
+    function tick(){
+      ctx.clearRect(0,0,W,H);
+      if(Math.random()>.975) spawnDrop();
+      for(let i=drops.length-1;i>=0;i--){
+        const d=drops[i];
+        d.trail = Math.min(d.trail+d.vy*1.3, 42);
+        d.vy   += 0.05;
+        d.y    += d.vy;
+        d.opacity -= 0.003;
+        if(d.opacity<=0||d.y>H+20){drops.splice(i,1);continue}
+        if(d.trail>3){
+          ctx.beginPath();
+          ctx.moveTo(d.x, d.y-d.trail);
+          ctx.lineTo(d.x, d.y);
+          ctx.strokeStyle=`rgba(120,0,0,${d.opacity*.6})`;
+          ctx.lineWidth=d.size*.38;
+          ctx.lineCap='round';
+          ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.ellipse(d.x,d.y,d.size*.55,d.size,0,0,Math.PI*2);
+        ctx.fillStyle=`rgba(150,0,0,${d.opacity})`;
+        ctx.fill();
+      }
+      requestAnimationFrame(tick);
+    }
+    // pre-seed a few drops
+    for(let i=0;i<4;i++) spawnDrop();
+    tick();
+  }, 120);
+}
+
+// Start animated blood for each card
+initAnimBlood('bl-vsl',    [{x:.78,y:.18},{x:.35,y:.72}], '#8b0000');
+initAnimBlood('bl-media',  [{x:.50,y:.82},{x:.20,y:.22}], '#8b3300');
+initAnimBlood('bl-email',  [{x:.22,y:.22},{x:.80,y:.78}], '#660044');
+initAnimBlood('bl-it',     [{x:.20,y:.20},{x:.82,y:.78}], '#002266');
+initAnimBlood('bl-products',[{x:.82,y:.78},{x:.18,y:.15}],'#7a3a00');
+initAnimBlood('bl-pl',     [{x:.50,y:.38}],                '#004422');
+
+/* ══════════════════════════════════════════════════════
+   CURSOR BLOOD — drops fall from mouse pointer
+══════════════════════════════════════════════════════ */
+(function initCursorBlood(){
+  let throttle = 0;
+
+  document.addEventListener('mousemove', e=>{
+    throttle++;
+    if(throttle % 3 !== 0) return;
+    if(Math.random() > 0.55) return;
+    const size = 4 + Math.random()*6;
+    const drop = document.createElement('div');
+    drop.className = 'cursor-blood';
+    drop.style.cssText = `left:${e.clientX + (Math.random()-.5)*10}px;top:${e.clientY+4}px;width:${size}px;height:${size}px`;
+
+    const trail = document.createElement('div');
+    trail.className = 'cursor-trail';
+    trail.style.cssText = `left:${parseFloat(drop.style.left)+size/2-.75}px;top:${e.clientY-4}px;width:1.5px;height:8px;opacity:0`;
+
+    document.body.appendChild(trail);
+    document.body.appendChild(drop);
+
+    let posY = e.clientY + 4;
+    let velY = 1.8 + Math.random()*2;
+    let opacity = 0.85 + Math.random()*.15;
+    let stretch = 1;
+    let trailH = 8;
+
+    function fall(){
+      velY   += 0.42;
+      posY   += velY;
+      stretch = Math.min(2.6, 1 + velY*.11);
+      opacity -= velY > 8 ? 0.04 : 0.018;
+      trailH  = Math.min(55, trailH + velY * .8);
+
+      drop.style.top       = posY + 'px';
+      drop.style.transform = `scaleY(${stretch})`;
+      drop.style.opacity   = opacity;
+
+      trail.style.top    = (posY - trailH - size*.5*stretch) + 'px';
+      trail.style.height = trailH + 'px';
+      trail.style.opacity = opacity * .5;
+
+      if(opacity > 0 && posY < window.innerHeight + 30){
+        requestAnimationFrame(fall);
+      } else {
+        drop.remove(); trail.remove();
+      }
+    }
+    requestAnimationFrame(fall);
+  });
+})();
 
 /* ══════════════════════════════════════════════════════
    MOUSE EFFECTS — 3D TILT + SPOTLIGHT + PARTICLES + DRIPS
