@@ -16,8 +16,7 @@ body{
 }
 #bg{position:fixed;inset:0;z-index:0}
 .moon{
-  position:fixed;top:-80px;right:60px;
-  width:200px;height:200px;border-radius:50%;
+  position:fixed;top:-80px;right:60px;width:200px;height:200px;border-radius:50%;
   background:radial-gradient(circle at 38% 35%,#c83000 0%,#8b0000 45%,#3d0000 80%,#1a0000 100%);
   box-shadow:0 0 60px 20px rgba(180,20,0,0.35),0 0 120px 40px rgba(180,10,0,0.12);
   z-index:1;animation:mp 5s ease-in-out infinite;
@@ -29,25 +28,20 @@ body{
 .mist{position:fixed;bottom:0;left:0;width:100%;height:160px;
   background:linear-gradient(to top,rgba(80,5,5,0.25),transparent);z-index:1;pointer-events:none}
 
+/* LOGIN CARD */
 .card{
   position:relative;z-index:10;
-  background:rgba(13,13,20,0.88);
-  border:1px solid rgba(204,17,0,0.2);
-  border-radius:8px;padding:48px 52px;
-  display:flex;flex-direction:column;align-items:center;gap:20px;
-  backdrop-filter:blur(12px);
-  box-shadow:0 0 60px rgba(0,0,0,0.7),0 0 30px rgba(180,0,0,0.12);
-  min-width:360px;
+  background:rgba(13,13,20,0.9);border:1px solid rgba(204,17,0,0.22);border-radius:8px;
+  padding:48px 54px;display:flex;flex-direction:column;align-items:center;gap:20px;
+  backdrop-filter:blur(14px);box-shadow:0 0 70px rgba(0,0,0,0.8),0 0 40px rgba(180,0,0,0.1);
+  min-width:370px;
 }
-.wolf-icon{
-  width:72px;height:72px;
-  filter:drop-shadow(0 0 12px rgba(200,0,0,0.6));
-}
+.wolf-icon{width:72px;height:72px;filter:drop-shadow(0 0 14px rgba(200,0,0,0.65));animation:iconBreath 3.5s ease-in-out infinite}
+@keyframes iconBreath{0%,100%{filter:drop-shadow(0 0 10px rgba(200,0,0,0.5))}50%{filter:drop-shadow(0 0 28px rgba(255,0,0,0.85))}}
 .card-title{
   font-size:1.4rem;letter-spacing:.3em;text-transform:uppercase;
   background:linear-gradient(135deg,#fff 0%,#cc1100 50%,#ff5500 100%);
-  background-size:200% auto;
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
   animation:shimmer 4s linear infinite;
 }
 @keyframes shimmer{to{background-position:200% center}}
@@ -56,30 +50,72 @@ body{
 .field{display:flex;flex-direction:column;gap:6px}
 .field label{font-size:.68rem;letter-spacing:.2em;text-transform:uppercase;color:var(--silver)}
 .field input{
-  background:rgba(255,255,255,0.04);
-  border:1px solid rgba(204,17,0,0.2);border-radius:3px;
-  color:#e0e0e0;padding:12px 16px;font-size:.9rem;
-  font-family:inherit;outline:none;transition:border-color .25s,box-shadow .25s;
+  background:rgba(255,255,255,0.04);border:1px solid rgba(204,17,0,0.2);border-radius:3px;
+  color:#e0e0e0;padding:12px 16px;font-size:.9rem;font-family:inherit;outline:none;
+  transition:border-color .25s,box-shadow .25s;
 }
-.field input::placeholder{color:rgba(138,150,163,0.5)}
+.field input::placeholder{color:rgba(138,150,163,0.45)}
 .field input:focus{border-color:rgba(204,17,0,0.55);box-shadow:0 0 0 2px rgba(204,17,0,0.12)}
+.field input.error{border-color:rgba(220,0,0,0.7);box-shadow:0 0 0 2px rgba(220,0,0,0.15)}
+.err-msg{
+  font-size:.72rem;letter-spacing:.1em;color:#ff4444;text-align:center;
+  background:rgba(200,0,0,0.08);border:1px solid rgba(200,0,0,0.2);border-radius:3px;
+  padding:8px 14px;display:none;
+}
+.err-msg.show{display:block}
 .submit-btn{
-  margin-top:6px;padding:14px;
-  font-size:.9rem;font-weight:700;letter-spacing:.18em;
+  margin-top:4px;padding:14px;font-size:.9rem;font-weight:700;letter-spacing:.18em;
   text-transform:uppercase;color:#fff;
-  background:linear-gradient(135deg,#8b0000,#cc1100);
-  border:none;border-radius:3px;cursor:pointer;
-  position:relative;overflow:hidden;transition:all .3s;
+  background:linear-gradient(135deg,#8b0000,#cc1100);border:none;border-radius:3px;
+  cursor:pointer;position:relative;overflow:hidden;transition:all .3s;
 }
 .submit-btn::after{
   content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.08),transparent);
-  transition:left .5s;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.09),transparent);transition:left .5s;
 }
 .submit-btn:hover::after{left:100%}
 .submit-btn:hover{background:linear-gradient(135deg,#cc1100,#ff4400);box-shadow:0 0 30px rgba(200,0,0,0.6)}
 .back{font-size:.7rem;letter-spacing:.15em;text-transform:uppercase;color:var(--silver);text-decoration:none;transition:color .2s}
 .back:hover{color:#cc1100}
+
+/* WELCOME OVERLAY */
+#welcome{
+  position:fixed;inset:0;z-index:100;
+  background:#06060a;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;
+  opacity:0;pointer-events:none;transition:opacity .5s ease;
+}
+#welcome.show{opacity:1;pointer-events:all}
+.w-wolf{
+  width:200px;height:200px;
+  filter:drop-shadow(0 0 40px rgba(200,0,0,0.7));
+  transform:scale(0.7);opacity:0;transition:transform .8s cubic-bezier(.22,1,.36,1),opacity .8s ease;
+  margin-bottom:24px;
+}
+#welcome.show .w-wolf{transform:scale(1);opacity:1;transition-delay:.3s}
+.w-line{font-size:.75rem;letter-spacing:.55em;text-transform:uppercase;color:#8b0000;
+  opacity:0;transform:translateY(10px);transition:opacity .6s,transform .6s;transition-delay:.7s}
+#welcome.show .w-line{opacity:1;transform:translateY(0)}
+.w-main{font-size:2.4rem;font-weight:900;letter-spacing:.2em;text-transform:uppercase;
+  color:#e8e8e8;margin:12px 0 8px;
+  opacity:0;transform:translateY(14px);transition:opacity .7s,transform .7s;transition-delay:.9s}
+#welcome.show .w-main{opacity:1;transform:translateY(0)}
+.w-name{
+  font-size:4rem;font-weight:900;letter-spacing:.15em;text-transform:uppercase;
+  background:linear-gradient(135deg,#ff2200,#cc1100,#8b0000);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  filter:drop-shadow(0 0 20px rgba(200,0,0,0.5));
+  opacity:0;transform:scale(0.85);transition:opacity .8s,transform .8s cubic-bezier(.22,1,.36,1);transition-delay:1.1s;
+}
+#welcome.show .w-name{opacity:1;transform:scale(1)}
+.w-tag{font-size:.72rem;letter-spacing:.4em;text-transform:uppercase;color:#8a96a3;margin-top:18px;
+  opacity:0;transition:opacity .6s;transition-delay:1.5s}
+#welcome.show .w-tag{opacity:1}
+.w-bar{
+  width:0;height:2px;background:linear-gradient(90deg,transparent,#cc1100,transparent);
+  margin-top:32px;transition:width 1s ease;transition-delay:1.8s;
+}
+#welcome.show .w-bar{width:260px}
 </style>
 </head>
 <body>
@@ -87,10 +123,56 @@ body{
 <canvas id="bg"></canvas>
 <div class="mist"></div>
 
-<div class="card">
-  <!-- Mini wolf SVG icon -->
-  <svg class="wolf-icon" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+<!-- WELCOME OVERLAY -->
+<div id="welcome">
+  <svg class="w-wolf" viewBox="0 0 300 310" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <filter id="wglow" x="-80%" y="-80%" width="260%" height="260%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
     <ellipse cx="150" cy="148" rx="118" ry="108" fill="#440000" opacity="0.18"/>
+    <path d="M 50 310 C 52 278,68 252,88 232 C 100 220,116 212,134 207 C 130 218,126 232,124 248 C 120 266,118 286,118 310 Z" fill="#0d0d12"/>
+    <path d="M 250 310 C 248 278,232 252,212 232 C 200 220,184 212,166 207 C 170 218,174 232,176 248 C 180 266,182 286,182 310 Z" fill="#0d0d12"/>
+    <path d="M 118 310 C 118 282,126 258,140 240 C 145 232,150 228,150 228 C 150 228,155 232,160 240 C 174 258,182 282,182 310 Z" fill="#101018"/>
+    <path d="M 150 44 C 125 44,95 58,78 86 C 62 112,58 144,64 170 C 70 194,84 212,100 220 C 106 223,112 225,120 224 L 128 218 L 150 215 L 172 218 L 180 224 C 188 225,194 223,200 220 C 216 212,230 194,236 170 C 242 144,238 112,222 86 C 205 58,175 44,150 44 Z" fill="#0d0d14"/>
+    <path d="M 85 82 C 78 64,65 28,75 14 C 80 7,90 7,96 16 C 104 27,106 62,107 80 Z" fill="#0c0c11"/>
+    <path d="M 87 78 C 81 62,70 30,77 18 C 81 12,89 13,94 21 C 101 31,103 62,104 77 Z" fill="#2d0606"/>
+    <path d="M 215 82 C 222 64,235 28,225 14 C 220 7,210 7,204 16 C 196 27,194 62,193 80 Z" fill="#0c0c11"/>
+    <path d="M 213 78 C 219 62,230 30,223 18 C 219 12,211 13,206 21 C 199 31,197 62,196 77 Z" fill="#2d0606"/>
+    <ellipse cx="150" cy="198" rx="56" ry="40" fill="#111118"/>
+    <ellipse cx="113" cy="148" rx="32" ry="24" fill="#bb1100" opacity="0.22" filter="url(#wglow)"/>
+    <ellipse cx="113" cy="148" rx="23" ry="18" fill="#cc1500"/>
+    <ellipse cx="113" cy="148" rx="7" ry="16" fill="#040404"/>
+    <ellipse cx="118" cy="141" rx="5" ry="3.5" fill="rgba(255,140,50,0.55)"/>
+    <ellipse cx="187" cy="148" rx="32" ry="24" fill="#bb1100" opacity="0.22" filter="url(#wglow)"/>
+    <ellipse cx="187" cy="148" rx="23" ry="18" fill="#cc1500"/>
+    <ellipse cx="187" cy="148" rx="7" ry="16" fill="#040404"/>
+    <ellipse cx="192" cy="141" rx="5" ry="3.5" fill="rgba(255,140,50,0.55)"/>
+    <path d="M 135 178 C 135 168,165 168,165 178 C 165 191,155 196,150 196 C 145 196,135 191,135 178 Z" fill="#060608"/>
+    <path d="M 118 222 C 108 238,104 255,110 268 C 118 283,133 294,150 296 C 167 294,182 283,190 268 C 196 255,192 238,182 222 C 175 226,164 228,150 228 C 136 228,125 226,118 222 Z" fill="#0d0d14"/>
+    <path d="M 110 216 C 112 250,128 272,150 276 C 172 272,188 250,190 216 C 178 208,165 204,150 204 C 135 204,122 208,110 216 Z" fill="#1c0000"/>
+    <path d="M 126 244 C 124 265,138 280,150 282 C 162 280,176 265,174 244 C 167 234,150 230,133 234 Z" fill="#7a0000"/>
+    <path d="M 150 240 L 150 278" stroke="#600000" stroke-width="1.5" fill="none"/>
+    <path d="M 116 211 L 111 237 L 123 211" fill="#eaeaea"/>
+    <path d="M 177 211 L 183 237 L 189 211" fill="#eaeaea"/>
+    <path d="M 129 210 L 126 222 L 134 210" fill="#ddd"/>
+    <path d="M 141 209 L 139 220 L 147 209" fill="#ddd"/>
+    <path d="M 153 209 L 151 220 L 159 209" fill="#ddd"/>
+    <path d="M 165 210 L 163 222 L 171 210" fill="#ddd"/>
+  </svg>
+  <p class="w-line">▴ &nbsp; THE PACK WELCOMES YOU &nbsp; ▴</p>
+  <h2 class="w-main">Welcome to the Wolves Den</h2>
+  <h1 class="w-name" id="welcome-name">PRABHAT</h1>
+  <p class="w-tag">The wolves never sleep. Enter the den.</p>
+  <div class="w-bar"></div>
+</div>
+
+<!-- LOGIN CARD -->
+<div class="card">
+  <svg class="wolf-icon" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg">
+    <ellipse cx="150" cy="148" rx="118" ry="108" fill="#440000" opacity="0.2"/>
     <path d="M 150 44 C 125 44,95 58,78 86 C 62 112,58 144,64 170 C 70 194,84 212,100 220 C 106 223,112 225,120 224 L 128 218 L 150 215 L 172 218 L 180 224 C 188 225,194 223,200 220 C 216 212,230 194,236 170 C 242 144,238 112,222 86 C 205 58,175 44,150 44 Z" fill="#0d0d14"/>
     <path d="M 85 82 C 78 64,65 28,75 14 C 80 7,90 7,96 16 C 104 27,106 62,107 80 Z" fill="#0c0c11"/>
     <path d="M 215 82 C 222 64,235 28,225 14 C 220 7,210 7,204 16 C 196 27,194 62,193 80 Z" fill="#0c0c11"/>
@@ -109,27 +191,56 @@ body{
   <h1 class="card-title">Enter the Pack</h1>
   <div class="deco"></div>
 
+  <div class="err-msg" id="err-msg">Wrong credentials. The pack doesn't know you.</div>
+
   <form class="form" onsubmit="handleLogin(event)">
     <div class="field">
       <label>Email</label>
-      <input type="email" placeholder="wolf@pack.com" required autocomplete="email"/>
+      <input type="email" id="inp-email" placeholder="wolf@pack.com" required autocomplete="email"/>
     </div>
     <div class="field">
       <label>Password</label>
-      <input type="password" placeholder="••••••••" required/>
+      <input type="password" id="inp-pass" placeholder="••••••••" required/>
     </div>
-    <button type="submit" class="submit-btn">Enter &nbsp;▴</button>
+    <button type="submit" class="submit-btn">Enter the Den &nbsp;▴</button>
   </form>
-
-  <a href="index.html" class="back">← Return to the Den</a>
+  <a href="index.html" class="back">← Return to the Wild</a>
 </div>
 
 <script>
+const CREDS = {email:'imprabhatsingh7@gmail.com',password:'123456789',username:'Prabhat'};
+
 function handleLogin(e){
   e.preventDefault();
-  window.location.href='dashboard.html';
+  const email = document.getElementById('inp-email').value.trim();
+  const pass  = document.getElementById('inp-pass').value;
+  const err   = document.getElementById('err-msg');
+
+  if(email === CREDS.email && pass === CREDS.password){
+    err.classList.remove('show');
+    document.getElementById('inp-email').classList.remove('error');
+    document.getElementById('inp-pass').classList.remove('error');
+    sessionStorage.setItem('wolf_user', CREDS.username);
+    showWelcome(CREDS.username);
+  } else {
+    err.classList.add('show');
+    document.getElementById('inp-email').classList.add('error');
+    document.getElementById('inp-pass').classList.add('error');
+    setTimeout(()=>{
+      document.getElementById('inp-email').classList.remove('error');
+      document.getElementById('inp-pass').classList.remove('error');
+    },2000);
+  }
 }
 
+function showWelcome(name){
+  document.getElementById('welcome-name').textContent = name.toUpperCase();
+  const overlay = document.getElementById('welcome');
+  overlay.classList.add('show');
+  setTimeout(()=>{ window.location.href='dashboard.html'; }, 3200);
+}
+
+/* Canvas background */
 const canvas=document.getElementById('bg');
 const ctx=canvas.getContext('2d');
 function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight}
