@@ -360,57 +360,83 @@ async function jvzoo(username, apiKey, action) {
   };
 
   if (action === 'fetchStats') {
-    /* Paginate /v3.0/transactions — 100 per page, cap at 200 pages (20k tx) */
-    const all = [];
-    let page = 1;
-    let fetchErr = null;
-
-    /* JVZoo v3.0 requires start_date + end_date (YYYY-MM-DD). Use ISO dates. */
-    const isoToday    = new Date().toISOString().slice(0, 10);
+    /* Fetch all transactions with proper pagination.
+       JVZoo v3.0 requires start_date + end_date (YYYY-MM-DD).
+       We chunk by month so each request stays under any per-page cap. */
+    const all       = [];
+    let fetchErr    = null;
+    let firstMeta   = null;  /* raw meta from page-1 for debugging */
+    const seen      = new Set();
     const isoTomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 
-    while (page <= 200) {
-      const q = new URLSearchParams({
-        start_date: '2020-01-01',
-        end_date:   isoTomorrow,
-        page:       String(page),
-        per_page:   '100',
-      });
+    /* Build monthly date chunks from 2011-01-01 (JVZoo founding) to today */
+    function isoYM(y, m) {
+      return `${y}-${String(m).padStart(2,'0')}-01`;
+    }
+    function lastDayISO(y, m) {
+      return new Date(y, m, 0).toISOString().slice(0, 10); // day=0 → last day of prev month
+    }
+    const startYear = 2011, startMonth = 1;
+    const now = new Date();
+    const endYear = now.getFullYear(), endMonth = now.getMonth() + 1;
+    const chunks = [];
+    let cy = startYear, cm = startMonth;
+    while (cy < endYear || (cy === endYear && cm <= endMonth)) {
+      chunks.push({ start: isoYM(cy, cm), end: lastDayISO(cy, cm + 1) });
+      cm++;
+      if (cm > 12) { cm = 1; cy++; }
+    }
+    /* Add current partial month */
+    chunks.push({ start: isoYM(endYear, endMonth), end: isoTomorrow });
 
-      const r = await fetch(`https://api.jvzoo.com/v3.0/transactions?${q}`, { headers: h });
+    for (const chunk of chunks) {
+      let page = 1;
+      while (page <= 50) { /* safety cap per chunk */
+        const q = new URLSearchParams({
+          start_date: chunk.start,
+          end_date:   chunk.end,
+          page:       String(page),
+          limit:      '100',
+          per_page:   '100',
+        });
 
-      if (!r.ok) {
-        let errMsg = `JVZoo HTTP ${r.status}`;
-        let errDetail = '';
-        try {
-          const errData = await r.json();
-          const msg = errData?.meta?.status?.message || errData?.message || errData?.error;
-          const detail = errData?.meta?.status?.detail;
-          if (msg) errMsg += `: ${msg}`;
-          if (detail) errDetail = ` (${JSON.stringify(detail)})`;
-        } catch { /* ignore */ }
-        fetchErr = errMsg + errDetail;
-        break;
+        const r = await fetch(`https://api.jvzoo.com/v3.0/transactions?${q}`, { headers: h });
+
+        if (!r.ok) {
+          try {
+            const errData = await r.json();
+            const msg = errData?.meta?.status?.message;
+            if (msg && !msg.includes('Invalid')) fetchErr = `JVZoo ${r.status}: ${msg}`;
+          } catch { /* ignore */ }
+          break; /* skip this chunk on error, continue others */
+        }
+
+        const d = await r.json().catch(() => null);
+        if (!d) break;
+        if (!firstMeta) firstMeta = d?.meta ?? null;
+
+        const tx = Array.isArray(d) ? d
+          : (d?.transactions || d?.data || d?.items || d?.results || []);
+
+        if (!Array.isArray(tx) || tx.length === 0) break;
+
+        for (const t of tx) {
+          const key = String(t.id ?? t.transaction_id ?? `${t.created_at}|${t.amount}`);
+          if (!seen.has(key)) { seen.add(key); all.push(t); }
+        }
+
+        /* Pagination: use meta.total_pages / next_cursor / result count */
+        const totalPages = d?.meta?.total_pages ?? d?.meta?.last_page ?? null;
+        const nextCursor = d?.meta?.next_cursor ?? d?.links?.next ?? null;
+        const perPage    = d?.meta?.per_page    ?? 100;
+        if (totalPages !== null && page >= totalPages) break;
+        if (!nextCursor && tx.length < perPage)        break;
+        page++;
       }
-
-      const d = await r.json().catch(() => null);
-      if (!d) { fetchErr = 'JVZoo returned non-JSON response'; break; }
-
-      const tx = Array.isArray(d) ? d
-        : (d?.transactions || d?.data || d?.items || d?.results || []);
-
-      if (!Array.isArray(tx) || tx.length === 0) break;
-      for (const t of tx) all.push(t);
-
-      /* Stop if fewer results than requested (last page) */
-      const totalPages = d?.meta?.total_pages ?? d?.meta?.last_page ?? d?.pagination?.total_pages ?? null;
-      if (totalPages !== null && page >= totalPages) break;
-      if (tx.length < 100) break;
-      page++;
     }
 
     if (all.length === 0 && fetchErr) return { success: false, error: fetchErr };
-    if (all.length === 0) return { success: false, error: 'JVZoo returned 0 transactions. Check API key or account has no sales.' };
+    if (all.length === 0) return { success: false, error: 'JVZoo returned 0 transactions. Check API key.' };
 
     /* ── Compute stats from raw transactions ── */
     const now   = Math.floor(Date.now() / 1000);
@@ -574,8 +600,9 @@ async function jvzoo(username, apiKey, action) {
         affiliates:         affs,
         recent_transactions: recentTx,
         _api_fields:        flatSample,   /* raw field structure from first transaction */
+        _jvzoo_meta:        firstMeta,    /* raw pagination meta from JVZoo */
       },
-      _counts: { total: all.length, pages: page - 1 },
+      _counts: { total: all.length, chunks: chunks.length },
     };
   }
 
