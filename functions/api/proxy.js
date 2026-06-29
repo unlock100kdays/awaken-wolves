@@ -409,15 +409,16 @@ async function jvzoo(username, apiKey, action) {
       }
     };
 
-    for (const chunk of chunks) {
-      /* Page 1 first — get data + discover total pages from meta */
+    /* Run all monthly chunks in parallel; within each chunk page 3 at a time.
+       Max concurrent requests = chunks(~12) × 3 = ~36 — safe for JVZoo. */
+    await Promise.allSettled(chunks.map(async (chunk) => {
       const first = await fetchPage(chunk.start, chunk.end, 1);
-      if (!first || first.tx.length === 0) continue;
+      if (!first || first.tx.length === 0) return;
       addTx(first.tx);
 
       const knownTotal  = first.totalPages;
-      const MAX_PAGES   = knownTotal ?? 100;
-      const CONCURRENCY = 5; /* conservative to avoid rate-limiting */
+      const MAX_PAGES   = knownTotal ?? 80;
+      const CONCURRENCY = 3;
 
       for (let p = 2; p <= MAX_PAGES; p += CONCURRENCY) {
         const batchNums = [];
@@ -431,7 +432,7 @@ async function jvzoo(username, apiKey, action) {
         }
         if (hitEmpty && knownTotal === null) break;
       }
-    }
+    }));
 
     if (all.length === 0 && fetchErr) return { success: false, error: fetchErr };
     if (all.length === 0) return { success: false, error: 'JVZoo returned 0 transactions. Check API key.' };
