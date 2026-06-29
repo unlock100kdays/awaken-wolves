@@ -381,7 +381,7 @@ async function jvzoo(username, apiKey, action) {
     const chunks = [];
     let cy = startYear, cm = startMonth;
     while (cy < endYear || (cy === endYear && cm <= endMonth)) {
-      chunks.push({ start: isoYM(cy, cm), end: lastDayISO(cy, cm + 1) });
+      chunks.push({ start: isoYM(cy, cm), end: lastDayISO(cy, cm) });
       cm++;
       if (cm > 12) { cm = 1; cy++; }
     }
@@ -395,7 +395,7 @@ async function jvzoo(username, apiKey, action) {
        - total_count gives exact total records for the date range */
     const fetchPage = async (start_date, end_date, page) => {
       try {
-        const q = new URLSearchParams({ start_date, end_date, page: String(page) });
+        const q = new URLSearchParams({ start_date, end_date, page_index: String(page) });
         const r = await fetch(`https://api.jvzoo.com/v3.0/transactions?${q}`, { headers: h });
         if (!r.ok) return null;
         const d = await r.json().catch(() => null);
