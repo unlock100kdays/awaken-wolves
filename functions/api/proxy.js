@@ -99,38 +99,65 @@ function fmtSaleDate(raw) {
      customerPhone, affiliate, amount, vat, saletimedate, saletimestamp,
      zipcode, country, billdesc, obselected, ipadd, rebill, mainorderid
 ──────────────────────────────────────────────────────────────────────────── */
-async function explFetch(username, apiKey, startdate, enddate) {
+async function explFetchPage(username, apiKey, startdate, enddate, page = 1) {
   const q = new URLSearchParams({
-    username,
-    apikey: apiKey,
-    apiaction: 'getsalebyget',
-    startdate,
-    enddate,
+    username, apikey: apiKey, apiaction: 'getsalebyget',
+    startdate, enddate, page: String(page),
   });
   const r = await fetch(`https://api.explodely.com/v1/sale?${q}`, {
     headers: { Accept: 'application/json', 'User-Agent': 'CloudflareWorker/1.0' },
   });
   const text = await r.text();
 
-  /* Cloudflare bot challenge returns HTML */
   if (text.trimStart().startsWith('<')) {
     throw new Error('BOT_BLOCKED: Explodely API blocked this server-side request');
   }
 
   let d;
   try { d = JSON.parse(text); }
-  catch { throw new Error(`Bad JSON from Explodely (HTTP ${r.status}): ${text.slice(0, 120)}`); }
+  catch { throw new Error(`Bad JSON from Explodely (HTTP ${r.status}): ${text.slice(0, 200)}`); }
 
   if (d?.error === 'invalidapikey')    throw new Error('Invalid API key or username');
   if (d?.error === 'invalid_sellerid') throw new Error('Not a valid Explodely seller account');
   if (d?.error) throw new Error(`Explodely error: ${d.error}`);
 
-  /* Response is either a bare array or an object wrapping one */
   const arr = Array.isArray(d)
     ? d
-    : (d?.sales || d?.data || d?.result || d?.transactions || d?.orders || Object.values(d).find(Array.isArray) || []);
+    : (d?.sales || d?.data || d?.result || d?.transactions || d?.orders
+       || Object.values(d).find(v => Array.isArray(v)) || []);
 
-  return Array.isArray(arr) ? arr : [];
+  const rows = Array.isArray(arr) ? arr : [];
+
+  /* Pagination metadata — cover every naming convention we've seen */
+  const totalPages   = d?.pages || d?.total_pages || d?.last_page || d?.pageCount || null;
+  const totalRecords = d?.total || d?.total_count  || d?.count     || null;
+  const hasNextPage  = d?.has_more || d?.hasMore
+    || (totalPages   != null && page < Number(totalPages))
+    || (totalRecords != null && rows.length > 0 && rows.length < Number(totalRecords));
+
+  return { rows, totalPages, totalRecords, hasNextPage };
+}
+
+/* Fetch ALL pages sequentially — avoids hammering the server */
+async function explFetch(username, apiKey, startdate, enddate) {
+  const all  = [];
+  let   page = 1;
+  const MAX_PAGES = 60; // safety cap — 60 × 8k = ~480k records
+
+  while (page <= MAX_PAGES) {
+    const { rows, hasNextPage } = await explFetchPage(username, apiKey, startdate, enddate, page);
+
+    if (rows.length === 0) break;
+    all.push(...rows);
+
+    /* Stop if API signals no more pages, or if this page was smaller than
+       the previous (signals last partial page), or no pagination hint at all */
+    if (!hasNextPage) break;
+
+    page++;
+  }
+
+  return all;
 }
 
 async function explodely(username, apiKey, action) {
@@ -146,48 +173,24 @@ async function explodely(username, apiKey, action) {
     return { success: true, offers: [], note: "Credentials saved — enter your offer name to pull sales data" };
   }
 
-  /* fetchStats — fetch year-by-year in parallel to bypass per-request record cap.
-     Explodely returns ~7-8k records max per request. An account with 46k+ sales
-     needs ~6 pages. Fetching each calendar year separately in parallel means no
-     single request exceeds the cap (assuming < ~8k sales per year). */
+  /* fetchStats — paginated fetch of all history.
+     explFetch() now walks every page sequentially so we get all 46k+ records
+     without hammering the server with parallel requests. */
   if (action === 'fetchStats') {
-    const curYear = new Date().getUTCFullYear();
+    let all = [];
+    let fetchError = null;
 
-    /* Build one fetch per calendar year from 2015 → current year */
-    const yearFetches = [];
-    for (let y = 2015; y <= curYear; y++) {
-      const s = `01-jan-${y}`;
-      const e = y === curYear ? tomorrow() : `31-dec-${y}`;
-      yearFetches.push(
-        explFetch(username, apiKey, s, e)
-          .then(data => ({ y, data }))
-          .catch(err => {
-            /* Rethrow auth errors immediately; swallow fetch/bot errors per-year */
-            if (err.message.includes('Invalid') || err.message.includes('seller account')) throw err;
-            return { y, data: [], err: err.message };
-          })
-      );
+    try {
+      all = await explFetch(username, apiKey, '01-jan-2015', tomorrow());
+    } catch (e) {
+      fetchError = e.message;
     }
-
-    const yearResults = await Promise.all(yearFetches);
-
-    /* Deduplicate by orderid across all years */
-    const seen = new Set();
-    const all  = [];
-    for (const { data } of yearResults) {
-      for (const s of data) {
-        const key = s.orderid || `${s.saletimestamp||''}${s.customerEmail||''}${s.amount||''}`;
-        if (!seen.has(key)) { seen.add(key); all.push(s); }
-      }
-    }
-
-    const fetchError = yearResults.every(r => r.data.length === 0)
-      ? (yearResults.find(r => r.err)?.err || 'No data returned')
-      : null;
 
     if (all.length === 0 && fetchError) {
       return { success: false, error: fetchError };
     }
+
+    const yearResults = []; // kept for _counts.byYear debug field
 
     /* UTC midnight boundaries for filtering */
     const utcMidnight = (daysBack) => {
@@ -368,10 +371,7 @@ async function explodely(username, apiKey, action) {
         recent_transactions: recentTxns,
       },
       _sample: all[0] || null,
-      _counts: {
-        total: all.length, today: todaySales.length, week7: week7Sales.length,
-        byYear: yearResults.map(r => ({ y: r.y, n: r.data.length })),
-      },
+      _counts: { total: all.length, today: todaySales.length, week7: week7Sales.length },
     };
   }
 
