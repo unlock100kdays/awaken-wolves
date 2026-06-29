@@ -365,18 +365,17 @@ async function jvzoo(username, apiKey, action) {
     let page = 1;
     let fetchErr = null;
 
-    /* Probe page 1 with no pagination params to discover what JVZoo accepts */
-    let paramStyle = null; // will be set on first successful response
+    /* JVZoo v3.0 requires start_date + end_date (YYYY-MM-DD). Use ISO dates. */
+    const isoToday    = new Date().toISOString().slice(0, 10);
+    const isoTomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 
     while (page <= 200) {
-      let q;
-      if (paramStyle === 'limit') {
-        q = new URLSearchParams({ limit: '100', page: String(page) });
-      } else if (paramStyle === 'per_page') {
-        q = new URLSearchParams({ per_page: '100', page: String(page) });
-      } else {
-        q = new URLSearchParams({}); // first call: no params, discover format
-      }
+      const q = new URLSearchParams({
+        start_date: '2020-01-01',
+        end_date:   isoTomorrow,
+        page:       String(page),
+        per_page:   '100',
+      });
 
       const r = await fetch(`https://api.jvzoo.com/v3.0/transactions?${q}`, { headers: h });
 
@@ -403,16 +402,10 @@ async function jvzoo(username, apiKey, action) {
       if (!Array.isArray(tx) || tx.length === 0) break;
       for (const t of tx) all.push(t);
 
-      /* Detect pagination style from meta on first page */
-      if (paramStyle === null) {
-        const perPageVal = d?.meta?.per_page ?? d?.meta?.limit ?? d?.pagination?.per_page ?? d?.pagination?.limit ?? null;
-        paramStyle = (perPageVal !== null || d?.meta?.total_pages !== undefined) ? 'per_page' : 'limit';
-      }
-
-      /* Check if more pages exist */
+      /* Stop if fewer results than requested (last page) */
       const totalPages = d?.meta?.total_pages ?? d?.meta?.last_page ?? d?.pagination?.total_pages ?? null;
-      const hasNextPage = d?.meta?.next_page ?? d?.links?.next ?? (totalPages !== null ? page < totalPages : null);
-      if (hasNextPage === false || hasNextPage === null && tx.length < 100) break;
+      if (totalPages !== null && page >= totalPages) break;
+      if (tx.length < 100) break;
       page++;
     }
 
