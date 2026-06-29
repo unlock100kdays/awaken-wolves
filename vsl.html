@@ -740,13 +740,16 @@ async function loadOffers(plat,creds){
   const offerSt=document.getElementById('offer-status');
   if(res.error){
     offerSt.className='status-msg warn show';
-    offerSt.textContent=`⚠ ${res.error} — API credentials saved. Enter offer name manually below.`;
+    offerSt.textContent=`⚠ ${res.error} — Enter offer name manually.`;
+  } else if(res.note){
+    offerSt.className='status-msg success show';
+    offerSt.textContent=`✓ Credentials verified. ${res.note}`;
   } else if(MOffers.length){
     offerSt.className='status-msg success show';
     offerSt.textContent=`✓ Found ${MOffers.length} offer${MOffers.length>1?'s':''} on ${plat} — select one or type manually`;
   } else {
     offerSt.className='status-msg warn show';
-    offerSt.textContent='No offers returned from API — enter offer name manually.';
+    offerSt.textContent='No product listing API — enter your offer name manually.';
   }
 
   document.getElementById('inp-offer-manual').value='';
@@ -822,17 +825,23 @@ async function apiFetchStats(plat,creds,offerId,offerName){
 }
 
 function parseStats(plat,raw,affRaw,name){
+  /* raw can be flat (Explodely — pre-computed by proxy) or nested (other platforms) */
   const s=raw?.data||raw?.stats||raw?.analytics||raw||{};
   const n=v=>Number(v)||0;
   const refRaw=n(s.refund_rate||s.refunds_percentage||s.refund_rate_percent||s.refundRate||0);
-  const cbRaw=n(s.chargeback_rate||s.chargebackRate||0);
-  /* Affiliates: proxy may return them in raw or affRaw */
+  const cbRaw =n(s.chargeback_rate||s.chargebackRate||0);
+
+  /* Affiliates: proxy pre-builds the array for Explodely (objects have rank/name/revenue/sales/epc)
+     For other platforms, affiliates come separately in affRaw */
   const affArr=(()=>{
-    const a=s.top_affiliates||s.affiliates||s.topAffiliates||s.affiliate_list||[];
-    if(a.length)return a;
+    /* Check raw first — Explodely proxy puts affiliates directly in raw.affiliates */
+    const a=s.affiliates||s.top_affiliates||s.topAffiliates||s.affiliate_list||[];
+    if(Array.isArray(a)&&a.length)return a;
+    /* Fall back to affRaw */
     const b=affRaw?.affiliates||affRaw?.data?.affiliates||affRaw?.data||affRaw?.items||affRaw||[];
     return Array.isArray(b)?b:[];
   })();
+
   return{
     revenueAllTime:  fmt(s.total_revenue||s.revenue_all_time||s.gross_revenue||s.totalRevenue||0),
     revenueToday:    fmt(s.today_revenue||s.revenue_today||s.daily_revenue||s.todayRevenue||0),
@@ -846,10 +855,10 @@ function parseStats(plat,raw,affRaw,name){
     chargebackRate:  cbRaw>1?cbRaw.toFixed(2)+'%':(cbRaw*100).toFixed(2)+'%',
     topAffiliates:   affArr.slice(0,10).map((a,i)=>({
       rank:i+1,
-      name:a.name||a.affiliate_name||a.affiliateName||a.username||a.email?.split('@')[0]||`Affiliate ${i+1}`,
-      revenue:fmt(a.revenue||a.total_revenue||a.totalRevenue||a.earned||a.commission||0),
+      name:String(a.name||a.affiliate_name||a.affiliateName||a.username||a.email?.split('@')[0]||`Affiliate ${i+1}`),
+      revenue:fmt(typeof a.revenue==='number'?a.revenue:(a.revenue||a.total_revenue||a.totalRevenue||a.earned||a.commission||0)),
       sales:n(a.sales||a.orders||a.referrals||a.units||0),
-      epc:'$'+n(a.epc||0).toFixed(2)
+      epc:'$'+(typeof a.epc==='number'?a.epc:n(a.epc||0)).toFixed(2)
     }))
   };
 }
