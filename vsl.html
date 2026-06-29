@@ -295,6 +295,15 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 
 /* DEN FOOTER */
 .den-footer{text-align:center;padding:4px 0 8px;font-size:.62rem;letter-spacing:.3em;text-transform:uppercase;color:rgba(138,150,163,.2);position:relative;z-index:1}
+
+/* API ERROR STATE */
+.api-err-box{padding:18px 14px;text-align:center}
+.api-err-ico{font-size:1.6rem;margin-bottom:8px}
+.api-err-msg{font-size:.7rem;color:rgba(255,80,50,.85);line-height:1.5;margin-bottom:12px;word-break:break-word}
+.api-err-hint{font-size:.62rem;color:rgba(138,150,163,.5);margin-bottom:12px}
+.api-retry-btn{background:rgba(200,0,0,.12);border:1px solid rgba(200,0,0,.3);color:var(--red);padding:5px 16px;border-radius:3px;cursor:pointer;font-size:.68rem;letter-spacing:.08em;font-family:inherit;transition:background .15s}
+.api-retry-btn:hover{background:rgba(200,0,0,.22)}
+.data-src-live{font-size:.54rem;letter-spacing:.12em;color:rgba(0,220,80,.45);text-transform:uppercase;padding:2px 0 8px}
 </style>
 </head>
 <body>
@@ -606,7 +615,7 @@ function saveState(){
   const state={bizops:{live:[],under:[]},nutra:{live:[],under:[]}};
   ['bizops','nutra'].forEach(col=>{
     document.querySelectorAll(`#list-live-${col} .offer-card`).forEach(c=>{
-      state[col].live.push({id:c.dataset.id,name:c.dataset.name,platform:c.dataset.platform,offerId:c.dataset.offerid,data:JSON.parse(c.dataset.blob||'{}')});
+      state[col].live.push({id:c.dataset.id,name:c.dataset.name,platform:c.dataset.platform,offerId:c.dataset.offerid,raw:JSON.parse(c.dataset.blob||'null')});
     });
     document.querySelectorAll(`#list-under-${col} .project-card`).forEach(c=>{
       const cl={};
@@ -635,7 +644,7 @@ function restoreAll(){
     ['bizops','nutra'].forEach(col=>{
       if(state[col]?.live?.length){
         document.getElementById(`list-live-${col}`).innerHTML='';
-        state[col].live.forEach(o=>createOfferCard(o.name,o.platform,o.data,col,o.id,o.offerId,true));
+        state[col].live.forEach(o=>createOfferCard(o.name,o.platform,o.raw||null,col,o.id,o.offerId,true,o.raw?null:'No cached data — click Refresh'));
       }
       if(state[col]?.under?.length){
         document.getElementById(`list-under-${col}`).innerHTML='';
@@ -826,14 +835,14 @@ async function connectOffer(){
   showStep('step-loading');
   document.getElementById('loading-msg').textContent=`Pulling all data for "${offerName}"…`;
   const creds=getCredFor(MP);
-  let data;
-  if(creds&&offerId){
-    const res=await apiFetchStats(MP,creds,offerId,offerName);
-    data=res.data||genFallback(offerName);
+  let raw=null,apiErr=null;
+  if(creds){
+    const res=await apiFetchStats(MP,creds,offerId||'',offerName);
+    raw=res.raw||null; apiErr=res.err||null;
   } else {
-    data=genFallback(offerName);
+    apiErr='No credentials saved for '+MP;
   }
-  createOfferCard(offerName,MP,data,MC,uid(),offerId,false);
+  createOfferCard(offerName,MP,raw,MC,uid(),offerId,false,apiErr);
   closeModal('modal-offer');updateStats();saveState();scheduleVeins();
 }
 
@@ -865,12 +874,11 @@ async function apiFetchOffers(plat,creds){
 async function apiFetchStats(plat,creds,offerId,offerName){
   try{
     const d=await callProxy({platform:plat,apiKey:creds.apiKey,apiSecret:creds.apiSecret||'',username:creds.username||'',action:'fetchStats',offerId});
-    /* Debug: log raw proxy response + sample sale to console */
-    console.log(`[${plat}] proxy response:`,JSON.stringify(d,null,2));
-    return{data:parseStats(plat,d.raw||{},d.affRaw||{},offerName),_debug:{counts:d._counts,sample:d._sample}};
+    console.log(`[${plat}] raw response:`,d._counts,'sample:',d._sample);
+    return{raw:d.raw||{},counts:d._counts||{}};
   }catch(e){
     console.error(`[${plat}] fetchStats error:`,e.message);
-    return{data:genFallback(offerName),_error:e.message};
+    return{raw:null,err:e.message};
   }
 }
 
@@ -949,54 +957,108 @@ function genFallback(name){
 ══════════════════════════════════════════ */
 const PCFG={Explodely:{color:'#ff5500'},JVzoo:{color:'#0077cc'},Clickbank:{color:'#00aa44'},Cartpanda:{color:'#9900cc'},Digistore:{color:'#cc7700'}};
 
-function createOfferCard(name,platform,data,col,id,offerId,fromRestore){
+/* Ordered list of stat fields the proxy may return.
+   Only fields present in the raw response (non-null, non-zero) will render. */
+const STAT_SPEC=[
+  {k:'total_revenue',     l:'All-Time Revenue',   f:'$',   c:'green', today:false},
+  {k:'today_revenue',     l:'Revenue Today',       f:'$',   c:'green', today:true },
+  {k:'yesterday_revenue', l:'Revenue Yesterday',   f:'$',   c:'green'             },
+  {k:'revenue_7_days',    l:'Last 7 Days',         f:'$',   c:'green'             },
+  {k:'revenue_30_days',   l:'Last 30 Days',        f:'$',   c:'green'             },
+  {k:'total_orders',      l:'Total Orders',        f:'n'                          },
+  {k:'avg_order_value',   l:'Avg Order Value',     f:'$',   c:'green'             },
+  {k:'refund_rate',       l:'Refund Rate',         f:'pct', c:'r:4:2.5'           },
+  {k:'chargeback_rate',   l:'Chargeback Rate',     f:'p2',  c:'r:0.3:0.15'        },
+  {k:'total_refunds',     l:'Total Refunds',       f:'n',   c:'red'               },
+  {k:'total_chargebacks', l:'Chargebacks',         f:'n',   c:'red'               },
+  {k:'total_vat',         l:'Total VAT / Tax',     f:'$',   c:'orange'            },
+  {k:'direct_revenue',    l:'Direct Revenue',      f:'$',   c:'green'             },
+  {k:'affiliate_revenue', l:'Affiliate Revenue',   f:'$',   c:'green'             },
+  {k:'rebill_revenue',    l:'Rebill Revenue',      f:'$',   c:'green'             },
+  {k:'order_bump_rate',   l:'Order Bump Rate',     f:'pct', c:'orange'            },
+  {k:'order_bump_count',  l:'Order Bumps Taken',   f:'n'                          },
+  {k:'last_sale_date',    l:'Last Sale',           f:'txt', full:true             },
+];
+function fmtStat(f,v){
+  if(f==='$')  return fmt(v);
+  if(f==='n')  return Number(v).toLocaleString();
+  if(f==='pct')return Number(v).toFixed(1)+'%';
+  if(f==='p2') return Number(v).toFixed(2)+'%';
+  return String(v);
+}
+function statCls(spec,v){
+  const c=spec.c||'';
+  if(c.startsWith('r:')){const[,bad,warn]=c.split(':').map(Number);const n=Number(v);return n>bad?'red':n>warn?'orange':'green';}
+  return c;
+}
+
+function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr){
   const list=document.getElementById(`list-live-${col}`);
   const emp=list.querySelector('.empty-state');if(emp)emp.remove();
   const card=document.createElement('div');
   card.className='offer-card';
-  card.dataset.id=id||uid();
+  const cid=id||uid();
+  card.dataset.id=cid;
   card.dataset.name=name;
   card.dataset.platform=platform||'';
   card.dataset.offerid=offerId||'';
-  card.dataset.blob=JSON.stringify(data||{});
+  card.dataset.blob=JSON.stringify(raw||null);
 
   const pclr=(PCFG[platform]||{color:'#8a96a3'}).color;
-  const refN=parseFloat(data.refundRate)||0;
-  const cbN=parseFloat(data.chargebackRate)||0;
-  const rCls=refN>4?'red':refN>2.5?'orange':'green';
-  const cCls=cbN>0.3?'red':cbN>0.15?'orange':'green';
   const platBadge=platform?`<span class="plat-badge" style="color:${pclr}">${escHtml(platform)}</span>`:'';
-  const cid=card.dataset.id;
 
-  /* ── Revenue split rows (Explodely-specific, null for others) */
-  const revSplitHTML=(data.directRevenue||data.affiliateRevenue)?`
-    <div class="df-item"><span class="df-label">Direct Revenue</span><span class="df-value green">${data.directRevenue||'—'}</span></div>
-    <div class="df-item"><span class="df-label">Affiliate Revenue</span><span class="df-value green">${data.affiliateRevenue||'—'}</span></div>
-    ${data.rebillRevenue?`<div class="df-item"><span class="df-label">Rebill Revenue</span><span class="df-value green">${data.rebillRevenue}</span></div>`:''}
-    ${data.totalVat?`<div class="df-item"><span class="df-label">Total VAT / Tax</span><span class="df-value orange">${data.totalVat}</span></div>`:''}
-    ${data.totalRefunds!=null?`<div class="df-item"><span class="df-label">Total Refunds</span><span class="df-value red">${data.totalRefunds}</span></div>`:''}
-    ${data.orderBumpRate?`<div class="df-item"><span class="df-label">Order Bump Rate</span><span class="df-value orange">${data.orderBumpRate} (${data.orderBumpCount||0} bumps)</span></div>`:''}
-    ${data.lastSaleDate?`<div class="df-item full"><span class="df-label">Last Sale</span><span class="df-value">${escHtml(data.lastSaleDate)}</span></div>`:''}
-  `:'';
+  /* ── Error state */
+  if(apiErr||!raw){
+    card.innerHTML=`
+      <div class="oc-header" onclick="toggleCard(this,'oc-body')">
+        <span class="oc-name">💰 ${escHtml(name)}</span>${platBadge}
+        <span class="live-dot" style="color:#cc4400">ERR</span>
+        <span class="oc-toggle open">▲</span>
+        <button class="oc-remove" onclick="removeCard(event,this)">✕</button>
+      </div>
+      <div class="oc-body">
+        <div class="api-err-box">
+          <div class="api-err-ico">⚠️</div>
+          <div class="api-err-msg">${escHtml(apiErr||'API returned no data')}</div>
+          <div class="api-err-hint">Check credentials or try refreshing. If you see "BOT_BLOCKED", the Explodely API is behind Cloudflare bot protection — try again in a few seconds.</div>
+          <button class="api-retry-btn" onclick="refreshOffer('${cid}')">↻ Retry</button>
+        </div>
+      </div>`;
+    list.appendChild(card);
+    if(!fromRestore){updateStats();saveState();}
+    return;
+  }
 
-  /* ── Products breakdown (when account has multiple products) */
-  const prodsHTML=(data.topProducts&&data.topProducts.length>1)?`
+  /* ── Build stat grid from STAT_SPEC — only fields with real values */
+  const statTiles=STAT_SPEC.filter(spec=>{
+    const v=raw[spec.k];
+    return v!=null&&v!==0&&v!=='';
+  }).map(spec=>{
+    const v=raw[spec.k];
+    const cls=statCls(spec,v);
+    const todayAttr=spec.today?' data-today="1"':'';
+    const fullCls=spec.full?' full':'';
+    return`<div class="df-item${fullCls}"><span class="df-label">${spec.l}</span><span class="df-value ${cls}"${todayAttr}>${fmtStat(spec.f,v)}</span></div>`;
+  }).join('');
+
+  /* ── Products */
+  const prods=Array.isArray(raw.top_products)?raw.top_products:[];
+  const prodsHTML=prods.length>1?`
     <div class="ex-block">
-      <div class="ex-title">Products on this Account (${data.topProducts.length})</div>
-      ${data.topProducts.map(p=>`
-      <div class="ex-row prod-row">
-        <span class="ex-name">${escHtml(p.name)}</span>
+      <div class="ex-title">Products on Account (${prods.length})</div>
+      ${prods.map(p=>`<div class="ex-row prod-row">
+        <span class="ex-name">${escHtml(p.name||p.id||'?')}</span>
         <span class="ex-sub">${p.orders} orders</span>
         <span class="ex-val green">${fmt(p.revenue)}</span>
       </div>`).join('')}
     </div>`:'';
 
-  /* ── Top countries */
-  const countriesHTML=(data.topCountries&&data.topCountries.length)?`
+  /* ── Countries */
+  const ctries=Array.isArray(raw.top_countries)?raw.top_countries:[];
+  const countriesHTML=ctries.length?`
     <div class="ex-block">
       <div class="ex-title">Top Countries</div>
-      ${data.topCountries.map((c,i)=>`
-      <div class="ex-row ctry-row">
+      ${ctries.map((c,i)=>`<div class="ex-row ctry-row">
         <span class="ex-rank">#${i+1}</span>
         <span class="ex-name">${cname(c.code)}</span>
         <span class="ex-sub">${c.count} sales</span>
@@ -1004,25 +1066,30 @@ function createOfferCard(name,platform,data,col,id,offerId,fromRestore){
       </div>`).join('')}
     </div>`:'';
 
-  /* ── Top 10 Affiliates */
-  const affRows=(data.topAffiliates||[]).map(a=>`
-    <div class="ex-row aff-row">
-      <span class="ex-rank">#${a.rank}</span>
-      <span class="ex-name">${escHtml(a.name)}</span>
-      <span class="ex-sub">${a.sales} sales</span>
-      <span class="ex-val green">${a.revenue}</span>
-    </div>`).join('');
+  /* ── Affiliates */
+  const affs=Array.isArray(raw.affiliates)?raw.affiliates:[];
+  const affHTML=affs.length?`
+    <div class="ex-block">
+      <div class="ex-title">Top ${affs.length} Affiliates</div>
+      ${affs.map(a=>`<div class="ex-row aff-row">
+        <span class="ex-rank">#${a.rank}</span>
+        <span class="ex-name">${escHtml(a.name)}</span>
+        <span class="ex-sub">${a.sales} sales</span>
+        <span class="ex-val green">${fmt(a.revenue)}</span>
+      </div>`).join('')}
+    </div>`:'';
 
   /* ── Recent Transactions */
-  const txnHTML=(data.recentTxns&&data.recentTxns.length)?`
+  const txns=Array.isArray(raw.recent_transactions)?raw.recent_transactions:[];
+  const txnHTML=txns.length?`
     <div class="ex-block">
-      <div class="ex-title">Recent Transactions (${data.recentTxns.length})</div>
-      ${data.recentTxns.map(t=>{
+      <div class="ex-title">Recent ${txns.length} Transactions</div>
+      ${txns.map(t=>{
         const tc=String(t.type||'sale').toLowerCase();
-        const tLabel=t.rebill?'rebill':tc;
+        const tl=t.rebill?'rebill':tc;
         return`<div class="ex-row txn-row">
-          <span class="ex-sub" style="white-space:nowrap;font-size:.58rem">${escHtml((t.date||'').replace(/\d\d:\d\d:\d\d /,''))}</span>
-          <span class="txn-type ${tLabel}">${tLabel}</span>
+          <span class="ex-sub" style="white-space:nowrap;font-size:.58rem">${escHtml((t.date||'').replace(/^\d\d:\d\d:\d\d /,''))}</span>
+          <span class="txn-type ${tl}">${tl}</span>
           <span class="ex-name">${escHtml(t.customer||'—')}</span>
           <span class="ex-sub">${escHtml(cname(t.country))}</span>
           <span class="ex-sub" style="color:rgba(200,170,0,.7)">${t.affiliate?escHtml(t.affiliate):'Direct'}</span>
@@ -1034,32 +1101,14 @@ function createOfferCard(name,platform,data,col,id,offerId,fromRestore){
   card.innerHTML=`
     <div class="oc-header" onclick="toggleCard(this,'oc-body')">
       <span class="oc-name">💰 ${escHtml(name)}</span>${platBadge}
-      <span class="live-dot">LIVE</span>
+      <span class="live-dot">● LIVE</span>
       <span class="oc-toggle open">▲</span>
       <button class="oc-remove" onclick="removeCard(event,this)">✕</button>
     </div>
     <div class="oc-body">
-      <div class="data-grid">
-        <div class="df-item"><span class="df-label">Platform</span><span class="df-value">${escHtml(platform||'—')}</span></div>
-        <div class="df-item"><span class="df-label">Total Revenue All-Time</span><span class="df-value green">${data.revenueAllTime||'—'}</span></div>
-        <div class="df-item"><span class="df-label">Revenue Today</span><span class="df-value green" data-today="1">${data.revenueToday||'—'}</span></div>
-        <div class="df-item"><span class="df-label">Revenue Yesterday</span><span class="df-value green">${data.revenueYesterday||'—'}</span></div>
-        <div class="df-item"><span class="df-label">Last 7 Days</span><span class="df-value green">${data.revenue7Days||'—'}</span></div>
-        ${data.revenue30Days!=null?`<div class="df-item"><span class="df-label">Last 30 Days</span><span class="df-value green">${data.revenue30Days}</span></div>`:''}
-        <div class="df-item"><span class="df-label">Total Orders</span><span class="df-value">${data.totalOrders||'—'}</span></div>
-        <div class="df-item"><span class="df-label">Avg Order Value</span><span class="df-value green">${data.avgOrderValue||'—'}</span></div>
-        <div class="df-item"><span class="df-label">Refund Rate</span><span class="df-value ${rCls}">${data.refundRate||'—'}</span></div>
-        <div class="df-item"><span class="df-label">Chargeback Rate</span><span class="df-value ${cCls}">${data.chargebackRate||'—'}</span></div>
-        <div class="df-item"><span class="df-label">EPC</span><span class="df-value green">${data.epc||'—'}</span></div>
-        ${revSplitHTML}
-      </div>
-      ${prodsHTML}
-      ${countriesHTML}
-      <div class="ex-block">
-        <div class="ex-title">Top 10 Affiliates</div>
-        ${affRows||'<div style="font-size:.7rem;color:rgba(138,150,163,.3);padding:4px 0">No affiliate data yet</div>'}
-      </div>
-      ${txnHTML}
+      <div class="data-src-live">↳ live data from ${escHtml(platform)} API</div>
+      <div class="data-grid">${statTiles}</div>
+      ${prodsHTML}${countriesHTML}${affHTML}${txnHTML}
       <button class="refresh-btn" onclick="refreshOffer('${cid}')">🔄 Refresh Data</button>
     </div>`;
   list.appendChild(card);
@@ -1087,18 +1136,17 @@ async function refreshOffer(cardId){
   const body=card.querySelector('.oc-body');
   body.innerHTML='<div style="text-align:center;padding:22px;color:var(--red);font-size:.72rem;letter-spacing:.1em;animation:pulse 1s infinite">⏳ Refreshing data streams…</div>';
   const creds=getCredFor(platform);
-  let data;
-  try{
-    if(creds){const res=await apiFetchStats(platform,creds,offerId||'',name);data=res.data||genFallback(name);}
-    else{data=genFallback(name);}
-  }catch(e){data=genFallback(name);}
-  card.dataset.blob=JSON.stringify(data);
+  let raw=null,apiErr=null;
+  if(creds){
+    const res=await apiFetchStats(platform,creds,offerId||'',name);
+    raw=res.raw||null; apiErr=res.err||null;
+  } else {
+    apiErr='No credentials saved for '+platform;
+  }
   const col=card.closest('[id^="list-live-"]').id.replace('list-live-','');
-  const listEl=card.parentElement;
-  const newCard=document.createElement('div');
-  listEl.insertBefore(newCard,card);
-  createOfferCard(name,platform,data,col,card.dataset.id,offerId,true);
+  const cardId2=card.dataset.id;
   card.remove();
+  createOfferCard(name,platform,raw,col,cardId2,offerId,true,apiErr);
   saveState();updateStats();scheduleVeins();
 }
 
