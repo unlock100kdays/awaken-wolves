@@ -388,41 +388,50 @@ async function jvzoo(username, apiKey, action) {
     /* Add current partial month */
     chunks.push({ start: isoYM(endYear, endMonth), end: isoTomorrow });
 
-    /* Fetch one page safely; returns { tx, totalPages } or null */
+    /* JVZoo v3.0 API facts (confirmed by probing):
+       - Response: { meta: { results_count, total_count, pagination: { page_size, page_index, has_more } }, results: [...] }
+       - Page index is 0-based
+       - page_size is always 50 (ignores limit/per_page params)
+       - total_count gives exact total records for the date range */
     const fetchPage = async (start_date, end_date, page) => {
       try {
-        const q = new URLSearchParams({ start_date, end_date, page: String(page), limit: '100', per_page: '100' });
+        const q = new URLSearchParams({ start_date, end_date, page: String(page) });
         const r = await fetch(`https://api.jvzoo.com/v3.0/transactions?${q}`, { headers: h });
         if (!r.ok) return null;
         const d = await r.json().catch(() => null);
         if (!d) return null;
-        const tx = Array.isArray(d) ? d : (d?.transactions || d?.data || d?.items || d?.results || []);
-        const totalPages = d?.meta?.total_pages ?? d?.meta?.last_page ?? null;
-        return { tx: Array.isArray(tx) ? tx : [], totalPages };
+        const tx   = Array.isArray(d?.results) ? d.results : (Array.isArray(d) ? d : []);
+        const pag  = d?.meta?.pagination ?? {};
+        const hasMore   = pag.has_more ?? false;
+        const pageSize  = pag.page_size ?? 50;
+        const total     = d?.meta?.total_count ?? null;
+        const lastPage  = total !== null ? Math.ceil(total / pageSize) - 1 : null; /* 0-indexed last page */
+        return { tx, hasMore, lastPage };
       } catch { return null; }
     };
 
     const addTx = (txList) => {
       for (const t of txList) {
-        const key = String(t.transaction_id ?? t.id ?? `${t.sale_date}|${t.amount}|${t.customer_email}`);
+        const key = String(t.transaction_id ?? `${t.sale_date}|${t.amount}|${t.customer?.email}`);
         if (!seen.has(key)) { seen.add(key); all.push(t); }
       }
     };
 
-    /* Run all monthly chunks in parallel; within each chunk page 3 at a time.
-       Max concurrent requests = chunks(~12) × 3 = ~36 — safe for JVZoo. */
+    /* Run all monthly chunks in parallel; pages 0-indexed, 3 concurrent per chunk */
     await Promise.allSettled(chunks.map(async (chunk) => {
-      const first = await fetchPage(chunk.start, chunk.end, 1);
+      /* Page 0 first — get data and discover total page count */
+      const first = await fetchPage(chunk.start, chunk.end, 0);
       if (!first || first.tx.length === 0) return;
       addTx(first.tx);
 
-      const knownTotal  = first.totalPages;
-      const MAX_PAGES   = knownTotal ?? 80;
+      if (!first.hasMore) return; /* only 1 page in this chunk */
+
+      const MAX_PAGE    = first.lastPage ?? 200; /* 0-indexed */
       const CONCURRENCY = 3;
 
-      for (let p = 2; p <= MAX_PAGES; p += CONCURRENCY) {
+      for (let p = 1; p <= MAX_PAGE; p += CONCURRENCY) {
         const batchNums = [];
-        for (let pp = p; pp < p + CONCURRENCY && pp <= MAX_PAGES; pp++) batchNums.push(pp);
+        for (let pp = p; pp <= Math.min(p + CONCURRENCY - 1, MAX_PAGE); pp++) batchNums.push(pp);
         const results = await Promise.allSettled(batchNums.map(pp => fetchPage(chunk.start, chunk.end, pp)));
         let hitEmpty = false;
         for (const r of results) {
@@ -430,7 +439,7 @@ async function jvzoo(username, apiKey, action) {
           if (!res || res.tx.length === 0) { hitEmpty = true; continue; }
           addTx(res.tx);
         }
-        if (hitEmpty && knownTotal === null) break;
+        if (hitEmpty && first.lastPage === null) break;
       }
     }));
 
@@ -455,7 +464,7 @@ async function jvzoo(username, apiKey, action) {
     const mid7       = todayMid - 6 * 86400;
     const mid30      = todayMid - 29 * 86400;
 
-    let gross = 0, refundAmt = 0, cbAmt = 0, totalFees = 0;
+    let gross = 0, sellerGross = 0, refundAmt = 0, cbAmt = 0, totalFees = 0;
     let orders = 0, refunds = 0, cbs = 0, rebills = 0;
     let todayRev = 0, ydayRev = 0, rev7 = 0, rev30 = 0;
     let lastSaleTs = 0;
@@ -465,44 +474,47 @@ async function jvzoo(username, apiKey, action) {
     const recentTx = [];
 
     for (const tx of all) {
-      /* Amount */
-      const amt = parseFloat(tx.amount ?? tx.gross_amount ?? tx.seller_amount ?? tx.price ?? tx.total ?? 0) || 0;
-      const jvzFee = parseFloat(tx.jvzoo_fee ?? tx.fee ?? tx.platform_fee ?? 0) || 0;
+      /* Amount — gross sale price; payouts.seller_earnings = what seller nets */
+      const amt         = parseFloat(tx.amount ?? 0) || 0;
+      const jvzFee      = parseFloat(tx.payouts?.jvzoo_fee ?? 0) || 0;
+      const sellerNet   = parseFloat(tx.payouts?.seller_earnings ?? tx.amount ?? 0) || 0;
 
-      /* Type — JVZoo v3.0 uses transaction_type or type; defaults SALE */
-      const typeRaw = String(tx.transaction_type ?? tx.type ?? tx.sale_type ?? tx.txn_type ?? 'SALE').toUpperCase();
-      const isRef    = typeRaw.includes('REFUND');
-      const isCB     = typeRaw.includes('CGBK') || typeRaw.includes('CHARGEBACK') || typeRaw.includes('DISPUTE');
-      const isSale   = !isRef && !isCB;
-      const isRebill = typeRaw.includes('REBILL') || tx.is_rebill === true || Number(tx.rebill_number ?? 0) > 0;
+      /* Type — status field: COMPLETED, REFUNDED, CHARGED_BACK, DISPUTED */
+      const status  = String(tx.status ?? 'COMPLETED').toUpperCase();
+      const refObj  = tx.refund; /* non-null when refunded */
+      const isRef   = status.includes('REFUND') || refObj !== null && refObj !== undefined;
+      const isCB    = status.includes('CHARG') || status.includes('DISPUT') || status.includes('CGBK');
+      const isSale  = !isRef && !isCB;
+      const isRebill = status.includes('REBILL') || false;
 
-      /* Timestamp — JVZoo uses sale_date (YYYY-MM-DD or ISO string) */
+      /* Timestamp — sale_date is full ISO: "2026-06-29T17:09:31Z" */
       let ts = 0;
-      const rawDate = tx.sale_date ?? tx.created_at ?? tx.date ?? tx.purchase_date ?? tx.transaction_date ?? '';
-      if (rawDate) {
-        const d = new Date(String(rawDate).includes('T') ? rawDate : rawDate + 'T00:00:00Z');
+      if (tx.sale_date) {
+        const d = new Date(tx.sale_date);
         if (!isNaN(d)) ts = Math.floor(d.getTime() / 1000);
       }
 
-      /* Customer — JVZoo v3.0 flat fields */
-      const email    = (tx.customer_email ?? tx.email ?? '').toLowerCase();
-      const custName = [tx.customer_first_name, tx.customer_last_name].filter(Boolean).join(' ')
-                    || (tx.customer_name ?? '');
-      const country  = tx.customer_country ?? tx.country ?? '';
+      /* Customer — nested object */
+      const cust     = tx.customer ?? {};
+      const email    = (cust.email ?? '').toLowerCase();
+      const custName = [cust.first_name, cust.last_name].filter(Boolean).join(' ');
+      const country  = cust.country ?? '';
 
       /* Product */
       const pid   = String(tx.product_id ?? '_unk');
-      const pname = tx.product_name ?? tx.title ?? pid;
+      const pname = tx.product_name ?? pid;
 
-      /* Affiliate */
-      const affId   = String(tx.affiliate_id ?? '');
-      const affName = tx.affiliate_display_name ?? tx.affiliate_name ?? '';
+      /* Affiliate — nested object */
+      const aff     = tx.affiliate ?? {};
+      const affId   = String(aff.id ?? '');
+      const affName = aff.display_name ?? '';
 
       if (email) emails.add(email);
 
       /* Revenue buckets */
       if (isSale) {
         gross += amt;
+        sellerGross += sellerNet;
         orders++;
         totalFees += jvzFee;
         if (isRebill) rebills++;
@@ -580,7 +592,7 @@ async function jvzoo(username, apiKey, action) {
         avg_order_value:    orders > 0 ? gross / orders : 0,
         customer_ltv:       emails.size > 0 ? netRev / emails.size : 0,
         total_platform_fees: totalFees > 0 ? totalFees : undefined,
-        seller_net_revenue:  totalFees > 0 ? gross - totalFees - refundAmt - cbAmt : undefined,
+        seller_net_revenue:  sellerGross > 0 ? sellerGross : undefined,
         total_rebills:      rebills > 0 ? rebills : undefined,
         rebill_rate:        orders > 0 && rebills > 0 ? rebills / orders * 100 : undefined,
         refund_rate:        refRate,
