@@ -1013,7 +1013,7 @@ function statCls(spec,v){
   return c;
 }
 
-function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr){
+function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,staleErr){
   const list=document.getElementById(`list-live-${col}`);
   const emp=list.querySelector('.empty-state');if(emp)emp.remove();
   const card=document.createElement('div');
@@ -1170,7 +1170,7 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr){
       <button class="oc-remove" onclick="removeCard(event,this)">✕</button>
     </div>
     <div class="oc-body">
-      <div class="data-src-live">↳ live data from ${escHtml(platform)} API</div>
+      ${staleErr?`<div class="data-src-live" style="color:#cc6600;border-color:#cc6600">⚠ Showing cached data — refresh failed: ${escHtml(staleErr)}</div>`:`<div class="data-src-live">↳ live data from ${escHtml(platform)} API</div>`}
       <div class="data-grid">${statTiles}</div>
       ${prodsHTML}${countriesHTML}${affHTML}${txnHTML}
       <button class="refresh-btn" onclick="refreshOffer('${cid}')">🔄 Refresh Data</button>
@@ -1197,8 +1197,14 @@ function removeCard(e,btn){
 async function refreshOffer(cardId){
   const card=document.querySelector(`[data-id="${cardId}"]`);if(!card)return;
   const name=card.dataset.name,platform=card.dataset.platform,offerId=card.dataset.offerid;
+
+  /* Save cached data before wiping body */
+  let cachedRaw=null;
+  try{cachedRaw=JSON.parse(card.dataset.blob||'null');}catch{}
+
   const body=card.querySelector('.oc-body');
-  body.innerHTML='<div style="text-align:center;padding:22px;color:var(--red);font-size:.72rem;letter-spacing:.1em;animation:pulse 1s infinite">⏳ Refreshing data streams…</div>';
+  body.innerHTML='<div style="text-align:center;padding:22px;color:rgba(200,120,0,.7);font-size:.72rem;letter-spacing:.1em;animation:pulse 1s infinite">⏳ Pulling live data…</div>';
+
   const creds=getCredFor(platform);
   let raw=null,apiErr=null;
   if(creds){
@@ -1207,10 +1213,15 @@ async function refreshOffer(cardId){
   } else {
     apiErr='No credentials saved for '+platform;
   }
+
+  /* API failed but we have old data — show cached with a stale banner */
+  const staleErr=(raw===null&&cachedRaw)?apiErr:null;
+  if(raw===null&&cachedRaw){raw=cachedRaw;apiErr=null;}
+
   const col=card.closest('[id^="list-live-"]').id.replace('list-live-','');
   const cardId2=card.dataset.id;
   card.remove();
-  createOfferCard(name,platform,raw,col,cardId2,offerId,true,apiErr);
+  createOfferCard(name,platform,raw,col,cardId2,offerId,true,apiErr,staleErr);
   saveState();updateStats();scheduleVeins();
 }
 

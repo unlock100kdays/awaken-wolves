@@ -109,11 +109,19 @@ async function explFetch(username, apiKey, startdate, enddate) {
   });
   const text = await r.text();
 
-  if (text.trimStart().startsWith('<')) throw new Error('BOT_BLOCKED');
+  if (text.trimStart().startsWith('<')) throw new Error('BOT_BLOCKED — Explodely is behind bot protection');
+
+  if (!r.ok) {
+    const body = text.trim();
+    throw new Error(body.length > 10
+      ? `Explodely API error (HTTP ${r.status}): ${body.slice(0, 300)}`
+      : `Explodely API temporarily blocked (HTTP ${r.status}) — wait 10-15 min and retry`
+    );
+  }
 
   let d;
   try { d = JSON.parse(text); }
-  catch { throw new Error(`Bad JSON from Explodely (HTTP ${r.status}): ${text.slice(0,200)}`); }
+  catch { throw new Error(`Explodely returned non-JSON (HTTP ${r.status}): ${text.slice(0, 200)}`); }
 
   if (d?.error === 'invalidapikey')    throw new Error('Invalid API key or username');
   if (d?.error === 'invalid_sellerid') throw new Error('Not a valid Explodely seller account');
