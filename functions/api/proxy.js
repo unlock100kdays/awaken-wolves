@@ -146,32 +146,46 @@ async function explodely(username, apiKey, action) {
     return { success: true, offers: [], note: "Credentials saved — enter your offer name to pull sales data" };
   }
 
-  /* fetchStats — fetch all history then filter client-side by timestamp */
+  /* fetchStats — fetch year-by-year in parallel to bypass per-request record cap.
+     Explodely returns ~7-8k records max per request. An account with 46k+ sales
+     needs ~6 pages. Fetching each calendar year separately in parallel means no
+     single request exceeds the cap (assuming < ~8k sales per year). */
   if (action === 'fetchStats') {
-    /* Try progressively shorter ranges if the long one fails */
-    let all = [];
-    const ranges = [
-      ['01-jan-2015', tomorrow()],  // all-time — back to 2015 to catch old accounts
-      ['01-jan-2020', tomorrow()],  // fallback
-      [daysAgo(730),  tomorrow()],  // 2 years fallback
-      [daysAgo(365),  tomorrow()],  // 1 year fallback
-      [daysAgo(90),   tomorrow()],  // 90 days last-resort
-    ];
-    let fetchError = null;
-    for (const [start, end] of ranges) {
-      try {
-        all = await explFetch(username, apiKey, start, end);
-        fetchError = null;
-        break;
-      } catch (e) {
-        fetchError = e.message;
-        if (e.message.includes('Invalid') || e.message.includes('seller account')) throw e;
-        /* Bot blocked or other error — try shorter range */
+    const curYear = new Date().getUTCFullYear();
+
+    /* Build one fetch per calendar year from 2015 → current year */
+    const yearFetches = [];
+    for (let y = 2015; y <= curYear; y++) {
+      const s = `01-jan-${y}`;
+      const e = y === curYear ? tomorrow() : `31-dec-${y}`;
+      yearFetches.push(
+        explFetch(username, apiKey, s, e)
+          .then(data => ({ y, data }))
+          .catch(err => {
+            /* Rethrow auth errors immediately; swallow fetch/bot errors per-year */
+            if (err.message.includes('Invalid') || err.message.includes('seller account')) throw err;
+            return { y, data: [], err: err.message };
+          })
+      );
+    }
+
+    const yearResults = await Promise.all(yearFetches);
+
+    /* Deduplicate by orderid across all years */
+    const seen = new Set();
+    const all  = [];
+    for (const { data } of yearResults) {
+      for (const s of data) {
+        const key = s.orderid || `${s.saletimestamp||''}${s.customerEmail||''}${s.amount||''}`;
+        if (!seen.has(key)) { seen.add(key); all.push(s); }
       }
     }
 
+    const fetchError = yearResults.every(r => r.data.length === 0)
+      ? (yearResults.find(r => r.err)?.err || 'No data returned')
+      : null;
+
     if (all.length === 0 && fetchError) {
-      /* Return structured error so frontend can show it */
       return { success: false, error: fetchError };
     }
 
@@ -353,9 +367,11 @@ async function explodely(username, apiKey, action) {
         top_countries:      topCountries,
         recent_transactions: recentTxns,
       },
-      /* Debug: first raw sale so we can verify field names if needed */
       _sample: all[0] || null,
-      _counts: { total: all.length, today: todaySales.length, week7: week7Sales.length },
+      _counts: {
+        total: all.length, today: todaySales.length, week7: week7Sales.length,
+        byYear: yearResults.map(r => ({ y: r.y, n: r.data.length })),
+      },
     };
   }
 
