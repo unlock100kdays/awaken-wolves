@@ -140,37 +140,22 @@ async function explodely(username, apiKey, action) {
     return { success: true, offers: [], note: "Credentials saved — enter your offer name to pull sales data" };
   }
 
-  /* fetchStats — fetch one calendar year at a time, sequentially.
-     Explodely caps each response at ~7-8k records. By fetching year-by-year
-     we stay under that cap per request (avg ~7k/year) and accumulate all data.
-     Sequential (not parallel) to avoid overwhelming the server. */
   if (action === 'fetchStats') {
-    const seen = new Set();
-    const all  = [];
-    let   fetchError = null;
-    const curYear = new Date().getUTCFullYear();
+    /* Single clean request — 01-jan-2024 to tomorrow.
+       No extra params, no pagination, no year splitting — exactly the same
+       call structure that was working before. */
+    let all = [];
+    try {
+      all = await explFetch(username, apiKey, '01-jan-2024', tomorrow());
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+
+    if (all.length === 0) {
+      return { success: false, error: 'Explodely returned 0 sales for 2024–today. Check credentials.' };
+    }
+
     const perYearCounts = {};
-
-    for (let y = 2020; y <= curYear; y++) {
-      const s = `01-jan-${y}`;
-      const e = y === curYear ? tomorrow() : `31-dec-${y}`;
-      try {
-        const batch = await explFetch(username, apiKey, s, e);
-        perYearCounts[y] = batch.length;
-        for (const sale of batch) {
-          const key = sale.orderid
-            || `${sale.saletimestamp||''}|${sale.customerEmail||''}|${sale.amount||''}`;
-          if (!seen.has(key)) { seen.add(key); all.push(sale); }
-        }
-      } catch (e2) {
-        if (e2.message.includes('Invalid') || e2.message.includes('seller account')) throw e2;
-        fetchError = e2.message; // record but continue other years
-      }
-    }
-
-    if (all.length === 0 && fetchError) {
-      return { success: false, error: fetchError };
-    }
 
     /* UTC midnight boundaries for filtering */
     const utcMidnight = (daysBack) => {
