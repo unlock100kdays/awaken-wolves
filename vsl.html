@@ -145,14 +145,7 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 .df-value.red{color:#ee2200}
 
 /* AFFILIATES */
-.affiliates-block{border-top:1px solid rgba(100,0,0,.1);padding-top:8px}
-.aff-title{font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--silver);margin-bottom:5px}
-.aff-row{display:grid;grid-template-columns:18px 1fr auto auto;gap:6px;align-items:center;padding:3px 7px;background:rgba(255,255,255,.02);border-radius:3px;margin-bottom:2px;font-size:.7rem}
-.aff-rank{color:var(--silver);font-size:.58rem}
-.aff-name{color:var(--text)}
-.aff-sales{color:var(--silver);font-size:.62rem}
-.aff-rev{color:#22dd66;font-weight:700}
-.refresh-btn{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--silver);background:transparent;border:1px solid var(--border);border-radius:3px;padding:4px 10px;cursor:pointer;transition:all .2s;align-self:flex-end;font-family:inherit}
+.refresh-btn{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--silver);background:transparent;border:1px solid var(--border);border-radius:3px;padding:4px 10px;cursor:pointer;transition:all .2s;align-self:flex-end;font-family:inherit;margin-top:8px}
 .refresh-btn:hover{border-color:rgba(180,0,0,.3);color:var(--red)}
 
 /* PROJECT CARD */
@@ -269,6 +262,32 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 .modal-check{display:flex;align-items:center;gap:6px;padding:6px 8px;background:rgba(255,255,255,.02);border-radius:3px;border:1px solid rgba(255,255,255,.04);cursor:pointer}
 .modal-check input{width:12px;height:12px;cursor:pointer;accent-color:var(--red)}
 .modal-check span{font-size:.72rem;color:var(--silver)}
+
+/* EXTENDED DATA BLOCKS (products, countries, recent txns) */
+.ex-block{border-top:1px solid rgba(100,0,0,.1);padding:8px 0 2px}
+.ex-title{font-size:.58rem;letter-spacing:.14em;text-transform:uppercase;color:var(--silver);margin-bottom:5px;padding:0 0 3px;border-bottom:1px solid rgba(255,255,255,.03)}
+.ex-row{display:grid;align-items:center;padding:3px 6px;background:rgba(255,255,255,.018);border-radius:3px;margin-bottom:2px;font-size:.7rem;gap:6px}
+.ex-rank{color:var(--silver);font-size:.58rem;flex-shrink:0}
+.ex-name{color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ex-sub{color:var(--silver);font-size:.62rem;flex-shrink:0}
+.ex-val{font-weight:700;flex-shrink:0}
+.ex-val.green{color:#22dd66}
+.ex-val.red{color:#ee3300}
+.ex-val.orange{color:#ff8800}
+/* products row */
+.prod-row{grid-template-columns:1fr auto auto}
+/* countries row */
+.ctry-row{grid-template-columns:22px 1fr auto auto}
+/* affiliate row */
+.aff-row{grid-template-columns:18px 1fr auto auto}
+/* transaction row */
+.txn-row{grid-template-columns:auto 46px 1fr auto auto auto;font-size:.62rem}
+.txn-type{font-size:.55rem;letter-spacing:.07em;text-transform:uppercase;padding:1px 5px;border-radius:2px;flex-shrink:0;font-weight:600}
+.txn-type.sale{background:rgba(0,180,80,.1);color:#22dd66;border:1px solid rgba(0,180,80,.2)}
+.txn-type.refund{background:rgba(220,60,0,.1);color:#ee4400;border:1px solid rgba(220,60,0,.2)}
+.txn-type.rebill{background:rgba(0,120,220,.1);color:#44aaff;border:1px solid rgba(0,120,220,.2)}
+.txn-type.chargeback{background:rgba(180,0,180,.1);color:#cc44cc;border:1px solid rgba(180,0,180,.2)}
+.txn-obump{font-size:.55rem;color:#ffaa00;letter-spacing:.04em;flex-shrink:0}
 
 /* CURSOR BLOOD */
 .cursor-blood{position:fixed;pointer-events:none;z-index:99999;border-radius:50% 50% 58% 58%;background:radial-gradient(ellipse at 40% 30%,#ff2200,#880000);box-shadow:0 0 6px rgba(200,0,0,.5);transform-origin:center top}
@@ -824,40 +843,53 @@ async function apiFetchStats(plat,creds,offerId,offerName){
   }
 }
 
+const COUNTRY_NAMES={US:'United States',GB:'United Kingdom',CA:'Canada',AU:'Australia',DE:'Germany',FR:'France',NL:'Netherlands',IN:'India',NZ:'New Zealand',SG:'Singapore',AE:'UAE',ZA:'South Africa',PH:'Philippines',MY:'Malaysia',NG:'Nigeria',IE:'Ireland',SE:'Sweden',NO:'Norway',DK:'Denmark',FI:'Finland',CH:'Switzerland',ES:'Spain',IT:'Italy',BR:'Brazil',MX:'Mexico',JP:'Japan',KR:'South Korea',PK:'Pakistan',BD:'Bangladesh',GH:'Ghana',KE:'Kenya'};
+function cname(code){return COUNTRY_NAMES[(code||'').toUpperCase()]||code||'Unknown';}
+
 function parseStats(plat,raw,affRaw,name){
-  /* raw can be flat (Explodely — pre-computed by proxy) or nested (other platforms) */
-  const s=raw?.data||raw?.stats||raw?.analytics||raw||{};
+  /* Explodely proxy returns a flat pre-computed raw object.
+     Other platforms may return nested stats + a separate affRaw. */
+  const s=raw||{};
   const n=v=>Number(v)||0;
-  const refRaw=n(s.refund_rate||s.refunds_percentage||s.refund_rate_percent||s.refundRate||0);
+  const refRaw=n(s.refund_rate||s.refunds_percentage||s.refundRate||0);
   const cbRaw =n(s.chargeback_rate||s.chargebackRate||0);
 
-  /* Affiliates: proxy pre-builds the array for Explodely (objects have rank/name/revenue/sales/epc)
-     For other platforms, affiliates come separately in affRaw */
+  /* Affiliates — Explodely puts them in s.affiliates; others in affRaw */
   const affArr=(()=>{
-    /* Check raw first — Explodely proxy puts affiliates directly in raw.affiliates */
-    const a=s.affiliates||s.top_affiliates||s.topAffiliates||s.affiliate_list||[];
+    const a=s.affiliates||s.top_affiliates||s.topAffiliates||[];
     if(Array.isArray(a)&&a.length)return a;
-    /* Fall back to affRaw */
     const b=affRaw?.affiliates||affRaw?.data?.affiliates||affRaw?.data||affRaw?.items||affRaw||[];
     return Array.isArray(b)?b:[];
   })();
 
   return{
-    revenueAllTime:  fmt(s.total_revenue||s.revenue_all_time||s.gross_revenue||s.totalRevenue||0),
-    revenueToday:    fmt(s.today_revenue||s.revenue_today||s.daily_revenue||s.todayRevenue||0),
-    revenueYesterday:fmt(s.yesterday_revenue||s.revenue_yesterday||s.yesterdayRevenue||0),
-    revenue7Days:    fmt(s.revenue_7_days||s.last_7_days||s.weekly_revenue||s.last7DaysRevenue||0),
-    totalOrders:     n(s.total_orders||s.orders_count||s.sales_count||s.totalOrders||0).toLocaleString(),
-    avgOrderValue:   fmt(s.avg_order_value||s.aov||s.avgOrderValue||0),
-    conversionRate:  fmtPct(s.conversion_rate||s.cvr||s.conversionRate||0),
+    revenueAllTime:  fmt(s.total_revenue||s.revenue_all_time||s.gross_revenue||0),
+    revenueToday:    fmt(s.today_revenue||s.revenue_today||s.daily_revenue||0),
+    revenueYesterday:fmt(s.yesterday_revenue||s.revenue_yesterday||0),
+    revenue7Days:    fmt(s.revenue_7_days||s.last_7_days||s.weekly_revenue||0),
+    totalOrders:     n(s.total_orders||s.orders_count||s.sales_count||0).toLocaleString(),
+    avgOrderValue:   fmt(s.avg_order_value||s.aov||0),
+    conversionRate:  fmtPct(s.conversion_rate||s.cvr||0),
     epc:             '$'+n(s.epc||0).toFixed(2),
     refundRate:      refRaw>1?refRaw.toFixed(1)+'%':(refRaw*100).toFixed(1)+'%',
     chargebackRate:  cbRaw>1?cbRaw.toFixed(2)+'%':(cbRaw*100).toFixed(2)+'%',
-    topAffiliates:   affArr.slice(0,10).map((a,i)=>({
+    /* Explodely-specific extras */
+    directRevenue:    s.direct_revenue!=null   ? fmt(s.direct_revenue)   : null,
+    affiliateRevenue: s.affiliate_revenue!=null ? fmt(s.affiliate_revenue): null,
+    rebillRevenue:    s.rebill_revenue!=null    ? fmt(s.rebill_revenue)   : null,
+    totalVat:         s.total_vat!=null         ? fmt(s.total_vat)        : null,
+    totalRefunds:     s.total_refunds!=null     ? s.total_refunds         : null,
+    orderBumpRate:    s.order_bump_rate!=null   ? n(s.order_bump_rate).toFixed(1)+'%' : null,
+    orderBumpCount:   s.order_bump_count!=null  ? s.order_bump_count      : null,
+    lastSaleDate:     s.last_sale_date||null,
+    topProducts:      Array.isArray(s.top_products)  ? s.top_products  : [],
+    topCountries:     Array.isArray(s.top_countries) ? s.top_countries : [],
+    recentTxns:       Array.isArray(s.recent_transactions) ? s.recent_transactions : [],
+    topAffiliates:    affArr.slice(0,10).map((a,i)=>({
       rank:i+1,
-      name:String(a.name||a.affiliate_name||a.affiliateName||a.username||a.email?.split('@')[0]||`Affiliate ${i+1}`),
-      revenue:fmt(typeof a.revenue==='number'?a.revenue:(a.revenue||a.total_revenue||a.totalRevenue||a.earned||a.commission||0)),
-      sales:n(a.sales||a.orders||a.referrals||a.units||0),
+      name:String(a.name||a.affiliate_name||a.username||`Affiliate ${i+1}`),
+      revenue:fmt(typeof a.revenue==='number'?a.revenue:n(a.revenue||a.total_revenue||a.earned||0)),
+      sales:n(a.sales||a.orders||a.referrals||0),
       epc:'$'+(typeof a.epc==='number'?a.epc:n(a.epc||0)).toFixed(2)
     }))
   };
@@ -901,15 +933,71 @@ function createOfferCard(name,platform,data,col,id,offerId,fromRestore){
   const cbN=parseFloat(data.chargebackRate)||0;
   const rCls=refN>4?'red':refN>2.5?'orange':'green';
   const cCls=cbN>0.3?'red':cbN>0.15?'orange':'green';
-  const affRows=(data.topAffiliates||[]).map(a=>`
-    <div class="aff-row">
-      <span class="aff-rank">#${a.rank}</span>
-      <span class="aff-name">${escHtml(a.name)}</span>
-      <span class="aff-sales">${a.sales} sales</span>
-      <span class="aff-rev">${a.revenue}</span>
-    </div>`).join('');
   const platBadge=platform?`<span class="plat-badge" style="color:${pclr}">${escHtml(platform)}</span>`:'';
   const cid=card.dataset.id;
+
+  /* ── Revenue split rows (Explodely-specific, null for others) */
+  const revSplitHTML=(data.directRevenue||data.affiliateRevenue)?`
+    <div class="df-item"><span class="df-label">Direct Revenue</span><span class="df-value green">${data.directRevenue||'—'}</span></div>
+    <div class="df-item"><span class="df-label">Affiliate Revenue</span><span class="df-value green">${data.affiliateRevenue||'—'}</span></div>
+    ${data.rebillRevenue?`<div class="df-item"><span class="df-label">Rebill Revenue</span><span class="df-value green">${data.rebillRevenue}</span></div>`:''}
+    ${data.totalVat?`<div class="df-item"><span class="df-label">Total VAT / Tax</span><span class="df-value orange">${data.totalVat}</span></div>`:''}
+    ${data.totalRefunds!=null?`<div class="df-item"><span class="df-label">Total Refunds</span><span class="df-value red">${data.totalRefunds}</span></div>`:''}
+    ${data.orderBumpRate?`<div class="df-item"><span class="df-label">Order Bump Rate</span><span class="df-value orange">${data.orderBumpRate} (${data.orderBumpCount||0} bumps)</span></div>`:''}
+    ${data.lastSaleDate?`<div class="df-item full"><span class="df-label">Last Sale</span><span class="df-value">${escHtml(data.lastSaleDate)}</span></div>`:''}
+  `:'';
+
+  /* ── Products breakdown (when account has multiple products) */
+  const prodsHTML=(data.topProducts&&data.topProducts.length>1)?`
+    <div class="ex-block">
+      <div class="ex-title">Products on this Account (${data.topProducts.length})</div>
+      ${data.topProducts.map(p=>`
+      <div class="ex-row prod-row">
+        <span class="ex-name">${escHtml(p.name)}</span>
+        <span class="ex-sub">${p.orders} orders</span>
+        <span class="ex-val green">${fmt(p.revenue)}</span>
+      </div>`).join('')}
+    </div>`:'';
+
+  /* ── Top countries */
+  const countriesHTML=(data.topCountries&&data.topCountries.length)?`
+    <div class="ex-block">
+      <div class="ex-title">Top Countries</div>
+      ${data.topCountries.map((c,i)=>`
+      <div class="ex-row ctry-row">
+        <span class="ex-rank">#${i+1}</span>
+        <span class="ex-name">${cname(c.code)}</span>
+        <span class="ex-sub">${c.count} sales</span>
+        <span class="ex-val green">${fmt(c.revenue)}</span>
+      </div>`).join('')}
+    </div>`:'';
+
+  /* ── Top 10 Affiliates */
+  const affRows=(data.topAffiliates||[]).map(a=>`
+    <div class="ex-row aff-row">
+      <span class="ex-rank">#${a.rank}</span>
+      <span class="ex-name">${escHtml(a.name)}</span>
+      <span class="ex-sub">${a.sales} sales</span>
+      <span class="ex-val green">${a.revenue}</span>
+    </div>`).join('');
+
+  /* ── Recent Transactions */
+  const txnHTML=(data.recentTxns&&data.recentTxns.length)?`
+    <div class="ex-block">
+      <div class="ex-title">Recent Transactions (${data.recentTxns.length})</div>
+      ${data.recentTxns.map(t=>{
+        const tc=String(t.type||'sale').toLowerCase();
+        const tLabel=t.rebill?'rebill':tc;
+        return`<div class="ex-row txn-row">
+          <span class="ex-sub" style="white-space:nowrap;font-size:.58rem">${escHtml((t.date||'').replace(/\d\d:\d\d:\d\d /,''))}</span>
+          <span class="txn-type ${tLabel}">${tLabel}</span>
+          <span class="ex-name">${escHtml(t.customer||'—')}</span>
+          <span class="ex-sub">${escHtml(cname(t.country))}</span>
+          <span class="ex-sub" style="color:rgba(200,170,0,.7)">${t.affiliate?escHtml(t.affiliate):'Direct'}</span>
+          <span class="ex-val ${tc==='refund'||tc==='chargeback'?'red':'green'}">${tc==='refund'||tc==='chargeback'?'-':''}${fmt(t.amount)}</span>
+        </div>`;
+      }).join('')}
+    </div>`:'';
 
   card.innerHTML=`
     <div class="oc-header" onclick="toggleCard(this,'oc-body')">
@@ -920,22 +1008,25 @@ function createOfferCard(name,platform,data,col,id,offerId,fromRestore){
     </div>
     <div class="oc-body">
       <div class="data-grid">
-        <div class="df-item"><span class="df-label">Platform Hosted</span><span class="df-value">${escHtml(platform||'—')}</span></div>
+        <div class="df-item"><span class="df-label">Platform</span><span class="df-value">${escHtml(platform||'—')}</span></div>
         <div class="df-item"><span class="df-label">Total Revenue All-Time</span><span class="df-value green">${data.revenueAllTime||'—'}</span></div>
         <div class="df-item"><span class="df-label">Revenue Today</span><span class="df-value green" data-today="1">${data.revenueToday||'—'}</span></div>
         <div class="df-item"><span class="df-label">Revenue Yesterday</span><span class="df-value green">${data.revenueYesterday||'—'}</span></div>
         <div class="df-item"><span class="df-label">Last 7 Days</span><span class="df-value green">${data.revenue7Days||'—'}</span></div>
         <div class="df-item"><span class="df-label">Total Orders</span><span class="df-value">${data.totalOrders||'—'}</span></div>
         <div class="df-item"><span class="df-label">Avg Order Value</span><span class="df-value green">${data.avgOrderValue||'—'}</span></div>
-        <div class="df-item"><span class="df-label">EPC</span><span class="df-value green">${data.epc||'—'}</span></div>
-        <div class="df-item"><span class="df-label">Conversion Rate</span><span class="df-value">${data.conversionRate||'—'}</span></div>
         <div class="df-item"><span class="df-label">Refund Rate</span><span class="df-value ${rCls}">${data.refundRate||'—'}</span></div>
-        <div class="df-item full"><span class="df-label">Chargeback Rate</span><span class="df-value ${cCls}">${data.chargebackRate||'—'}</span></div>
+        <div class="df-item"><span class="df-label">Chargeback Rate</span><span class="df-value ${cCls}">${data.chargebackRate||'—'}</span></div>
+        <div class="df-item"><span class="df-label">EPC</span><span class="df-value green">${data.epc||'—'}</span></div>
+        ${revSplitHTML}
       </div>
-      <div class="affiliates-block">
-        <div class="aff-title">Top 10 Affiliates &amp; Revenue</div>
-        ${affRows||'<div style="font-size:.7rem;color:rgba(138,150,163,.3);padding:4px">No affiliate data</div>'}
+      ${prodsHTML}
+      ${countriesHTML}
+      <div class="ex-block">
+        <div class="ex-title">Top 10 Affiliates</div>
+        ${affRows||'<div style="font-size:.7rem;color:rgba(138,150,163,.3);padding:4px 0">No affiliate data yet</div>'}
       </div>
+      ${txnHTML}
       <button class="refresh-btn" onclick="refreshOffer('${cid}')">🔄 Refresh Data</button>
     </div>`;
   list.appendChild(card);
@@ -961,20 +1052,21 @@ async function refreshOffer(cardId){
   const card=document.querySelector(`[data-id="${cardId}"]`);if(!card)return;
   const name=card.dataset.name,platform=card.dataset.platform,offerId=card.dataset.offerid;
   const body=card.querySelector('.oc-body');
-  const old=body.innerHTML;
   body.innerHTML='<div style="text-align:center;padding:22px;color:var(--red);font-size:.72rem;letter-spacing:.1em;animation:pulse 1s infinite">⏳ Refreshing data streams…</div>';
   const creds=getCredFor(platform);
   let data;
-  if(creds&&offerId){const res=await apiFetchStats(platform,creds,offerId,name);data=res.data||genFallback(name);}
-  else{data=genFallback(name);}
+  try{
+    if(creds){const res=await apiFetchStats(platform,creds,offerId||'',name);data=res.data||genFallback(name);}
+    else{data=genFallback(name);}
+  }catch(e){data=genFallback(name);}
   card.dataset.blob=JSON.stringify(data);
-  // rebuild body only
   const col=card.closest('[id^="list-live-"]').id.replace('list-live-','');
-  const tempList=document.createElement('div');
+  const listEl=card.parentElement;
+  const newCard=document.createElement('div');
+  listEl.insertBefore(newCard,card);
   createOfferCard(name,platform,data,col,card.dataset.id,offerId,true);
-  const newCard=document.querySelector(`[data-id="${card.dataset.id}"]`);
-  card.replaceWith(newCard);
-  saveState();updateStats();
+  card.remove();
+  saveState();updateStats();scheduleVeins();
 }
 
 /* ══════════════════════════════════════════
