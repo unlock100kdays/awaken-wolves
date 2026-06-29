@@ -1161,8 +1161,8 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
         return`<div class="ex-row txn-row">
           <span class="ex-sub" style="white-space:nowrap;font-size:.58rem">${escHtml((t.date||'').replace(/^\d\d:\d\d:\d\d /,''))}</span>
           <span class="txn-type ${tl}">${tl}</span>
-          <span class="ex-name">${escHtml(t.customer||'—')}</span>
-          <span class="ex-sub">${escHtml(cname(t.country))}</span>
+          <span class="ex-name">${escHtml(t.product||t.customer||'—')}</span>
+          <span class="ex-sub">${escHtml(t.customer||'')}</span>
           <span class="ex-sub" style="color:rgba(200,170,0,.7)">${t.affiliate?escHtml(t.affiliate):'Direct'}</span>
           <span class="ex-val ${tc==='refund'||tc==='chargeback'?'red':'green'}">${tc==='refund'||tc==='chargeback'?'-':''}${fmt(t.amount)}</span>
         </div>`;

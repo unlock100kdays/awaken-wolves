@@ -438,6 +438,17 @@ async function jvzoo(username, apiKey, action) {
     if (all.length === 0 && fetchErr) return { success: false, error: fetchErr };
     if (all.length === 0) return { success: false, error: 'JVZoo returned 0 transactions. Check API key.' };
 
+    /* Sort newest-first so recentTx collects the latest 25, not the oldest */
+    all.sort((a, b) => {
+      const tsOf = tx => {
+        const raw = tx.sale_date ?? tx.created_at ?? tx.date ?? '';
+        if (!raw) return 0;
+        const d = new Date(String(raw).includes('T') ? raw : raw + 'T00:00:00Z');
+        return isNaN(d) ? 0 : d.getTime();
+      };
+      return tsOf(b) - tsOf(a);
+    });
+
     /* ── Compute stats from raw transactions ── */
     const nowTs = Math.floor(Date.now() / 1000);
     const todayMid   = Math.floor(new Date(new Date().setUTCHours(0,0,0,0)).getTime() / 1000);
@@ -530,9 +541,10 @@ async function jvzoo(username, apiKey, action) {
           date: dateStr,
           type: isRef ? 'refund' : isCB ? 'chargeback' : 'sale',
           amount: amt,
-          customer: custName || (email ? email.split('@')[0] : '—'),
+          product: pname !== pid ? pname : '',
+          customer: custName || (email ? email.split('@')[0] : ''),
           country,
-          affiliate: affName || (affId || ''),
+          affiliate: affName || affId || '',
           rebill: isRebill,
         });
       }
