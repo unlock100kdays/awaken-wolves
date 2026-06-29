@@ -376,7 +376,7 @@ async function jvzoo(username, apiKey, action) {
     function lastDayISO(y, m) {
       return new Date(y, m, 0).toISOString().slice(0, 10); // day=0 → last day of prev month
     }
-    const startYear = 2025, startMonth = 11;
+    const startYear = 2025, startMonth = 7; /* last 12 months */
     const now = new Date();
     const endYear = now.getFullYear(), endMonth = now.getMonth() + 1;
     const chunks = [];

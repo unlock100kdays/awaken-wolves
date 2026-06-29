@@ -1077,6 +1077,9 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
   const prodTotalOrd=prods.reduce((s,p)=>s+p.orders,0);
   const prodTotalRef=prods.reduce((s,p)=>s+p.refunds,0);
   const prodTotalCB =prods.reduce((s,p)=>s+p.chargebacks,0);
+  const prodTotalToday=prods.reduce((s,p)=>s+p.today,0);
+  const prodTotal7d   =prods.reduce((s,p)=>s+p.week7,0);
+  const prodTotal30d  =prods.reduce((s,p)=>s+p.week30,0);
   const prodsHTML=prods.length>0?`
     <div class="ex-block">
       <div class="ex-title">Funnels / Products (${prods.length})</div>
@@ -1116,7 +1119,9 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
           <td>${prodTotalOrd.toLocaleString()}</td>
           <td class="green">${fmt(prodTotalRev)}</td>
           <td class="green">${prodTotalOrd>0?fmt(prodTotalRev/prodTotalOrd):'—'}</td>
-          <td>—</td><td>—</td><td>—</td>
+          <td>${prodTotalToday>0?fmt(prodTotalToday):'—'}</td>
+          <td>${prodTotal7d>0?fmt(prodTotal7d):'—'}</td>
+          <td>${prodTotal30d>0?fmt(prodTotal30d):'—'}</td>
           <td class="${prodTotalRef>0?'red':''}">${prodTotalRef}</td>
           <td>${prodTotalOrd>0?(prodTotalRef/prodTotalOrd*100).toFixed(1)+'%':'0%'}</td>
           <td class="${prodTotalCB>0?'red':''}">${prodTotalCB}</td>
