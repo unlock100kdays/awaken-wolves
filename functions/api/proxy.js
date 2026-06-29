@@ -151,7 +151,8 @@ async function explodely(username, apiKey, action) {
     /* Try progressively shorter ranges if the long one fails */
     let all = [];
     const ranges = [
-      ['01-jan-2020', tomorrow()],  // all-time — enddate = tomorrow avoids timezone cutoff
+      ['01-jan-2015', tomorrow()],  // all-time — back to 2015 to catch old accounts
+      ['01-jan-2020', tomorrow()],  // fallback
       [daysAgo(730),  tomorrow()],  // 2 years fallback
       [daysAgo(365),  tomorrow()],  // 1 year fallback
       [daysAgo(90),   tomorrow()],  // 90 days last-resort
@@ -259,20 +260,49 @@ async function explodely(username, apiKey, action) {
     });
     const topCountries = Object.values(ctryMap).sort((a,b)=>b.count-a.count).slice(0,8);
 
-    /* Products — with today + 7-day slices */
+    /* Products / Funnels — net revenue per product with full metrics */
     const prodMap = {};
-    salesOnly(allSales).forEach(s => {
-      const pid   = s.productId  || 'x';
+    allSales.forEach(s => {
+      const pid   = s.productId   || '_unknown';
       const pname = s.productName || s.productId || 'Unknown';
-      if (!prodMap[pid]) prodMap[pid] = { id:pid, name:pname, revenue:0, orders:0, today:0, week7:0 };
-      const amt = parseFloat(s.amount||0)||0;
-      const ts  = saleTs(s);
-      prodMap[pid].revenue += amt;
-      prodMap[pid].orders++;
-      if (ts >= midToday) prodMap[pid].today += amt;
-      if (ts >= mid7)     prodMap[pid].week7 += amt;
+      const t     = String(s.type || '').toLowerCase();
+      const amt   = parseFloat(s.amount || 0) || 0;
+      const ts    = saleTs(s);
+
+      if (!prodMap[pid]) prodMap[pid] = {
+        id: pid, name: pname,
+        revenue: 0, orders: 0,
+        refunds: 0, refundAmount: 0,
+        chargebacks: 0, cbAmount: 0,
+        today: 0, week7: 0, week30: 0,
+      };
+      const p = prodMap[pid];
+
+      if (t === 'refund') {
+        p.revenue      -= amt;
+        p.refunds++;
+        p.refundAmount += amt;
+      } else if (t === 'chargeback') {
+        p.revenue      -= amt;
+        p.chargebacks++;
+        p.cbAmount     += amt;
+      } else {
+        p.revenue += amt;
+        p.orders++;
+        if (ts >= midToday) p.today  += amt;
+        if (ts >= mid7)     p.week7  += amt;
+        if (ts >= mid30)    p.week30 += amt;
+      }
     });
-    const topProducts = Object.values(prodMap).sort((a,b)=>b.revenue-a.revenue);
+    const topProducts = Object.values(prodMap)
+      .filter(p => p.orders > 0)
+      .sort((a, b) => b.revenue - a.revenue)
+      .map(p => ({
+        ...p,
+        aov:        p.orders > 0 ? p.revenue / p.orders : 0,
+        refundRate: p.orders > 0 ? p.refunds / p.orders * 100 : 0,
+        cbRate:     p.orders > 0 ? p.chargebacks / p.orders * 100 : 0,
+      }));
 
     /* Recent 20 transactions */
     const recentTxns = sorted.slice(0,20).map(s => ({
