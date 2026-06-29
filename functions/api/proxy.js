@@ -365,7 +365,6 @@ async function jvzoo(username, apiKey, action) {
        We chunk by month so each request stays under any per-page cap. */
     const all       = [];
     let fetchErr    = null;
-    let firstMeta   = null;  /* raw meta from page-1 for debugging */
     const seen      = new Set();
     const isoTomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 
@@ -389,49 +388,49 @@ async function jvzoo(username, apiKey, action) {
     /* Add current partial month */
     chunks.push({ start: isoYM(endYear, endMonth), end: isoTomorrow });
 
+    /* Fetch one page; returns { tx, totalPages } or null on error */
+    const fetchPage = async (start_date, end_date, page) => {
+      const q = new URLSearchParams({ start_date, end_date, page: String(page), limit: '100', per_page: '100' });
+      const r = await fetch(`https://api.jvzoo.com/v3.0/transactions?${q}`, { headers: h });
+      if (!r.ok) return null;
+      const d = await r.json().catch(() => null);
+      if (!d) return null;
+      const tx = Array.isArray(d) ? d : (d?.transactions || d?.data || d?.items || d?.results || []);
+      const totalPages = d?.meta?.total_pages ?? d?.meta?.last_page ?? null;
+      return { tx: Array.isArray(tx) ? tx : [], totalPages };
+    };
+
+    const addTx = (tx) => {
+      for (const t of tx) {
+        const key = String(t.transaction_id ?? t.id ?? `${t.sale_date}|${t.amount}|${t.customer_email}`);
+        if (!seen.has(key)) { seen.add(key); all.push(t); }
+      }
+    };
+
     for (const chunk of chunks) {
-      let page = 1;
-      while (page <= 50) { /* safety cap per chunk */
-        const q = new URLSearchParams({
-          start_date: chunk.start,
-          end_date:   chunk.end,
-          page:       String(page),
-          limit:      '100',
-          per_page:   '100',
-        });
+      /* Page 1 first — discovers total page count from meta */
+      const first = await fetchPage(chunk.start, chunk.end, 1);
+      if (!first || first.tx.length === 0) continue;
+      addTx(first.tx);
 
-        const r = await fetch(`https://api.jvzoo.com/v3.0/transactions?${q}`, { headers: h });
+      const knownTotal = first.totalPages;
+      const MAX_PAGES  = knownTotal ?? 200; /* cap at 200 if API doesn't report total */
+      const CONCURRENCY = 15;
 
-        if (!r.ok) {
-          try {
-            const errData = await r.json();
-            const msg = errData?.meta?.status?.message;
-            if (msg && !msg.includes('Invalid')) fetchErr = `JVZoo ${r.status}: ${msg}`;
-          } catch { /* ignore */ }
-          break; /* skip this chunk on error, continue others */
+      /* Fetch remaining pages in concurrent batches of 15 */
+      for (let p = 2; p <= MAX_PAGES; p += CONCURRENCY) {
+        const batch = [];
+        for (let pp = p; pp < p + CONCURRENCY && pp <= MAX_PAGES; pp++) {
+          batch.push(fetchPage(chunk.start, chunk.end, pp));
         }
-
-        const d = await r.json().catch(() => null);
-        if (!d) break;
-        if (!firstMeta) firstMeta = d?.meta ?? null;
-
-        const tx = Array.isArray(d) ? d
-          : (d?.transactions || d?.data || d?.items || d?.results || []);
-
-        if (!Array.isArray(tx) || tx.length === 0) break;
-
-        for (const t of tx) {
-          const key = String(t.transaction_id ?? t.id ?? `${t.sale_date}|${t.amount}|${t.customer_email}`);
-          if (!seen.has(key)) { seen.add(key); all.push(t); }
+        const results = await Promise.all(batch);
+        let hitEmpty = false;
+        for (const res of results) {
+          if (!res || res.tx.length === 0) { hitEmpty = true; continue; }
+          addTx(res.tx);
         }
-
-        /* Pagination: use meta.total_pages / next_cursor / result count */
-        const totalPages = d?.meta?.total_pages ?? d?.meta?.last_page ?? null;
-        const nextCursor = d?.meta?.next_cursor ?? d?.links?.next ?? null;
-        const perPage    = d?.meta?.per_page    ?? 100;
-        if (totalPages !== null && page >= totalPages) break;
-        if (!nextCursor && tx.length < perPage)        break;
-        page++;
+        /* If we got an empty page and total was unknown, we've exhausted this chunk */
+        if (hitEmpty && knownTotal === null) break;
       }
     }
 
