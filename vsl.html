@@ -509,12 +509,12 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
       </div>
     </div>
 
-    <!-- STEP 3: Offer selection -->
+    <!-- STEP 3: Offer selection / name entry -->
     <div id="step-offers" class="m-step">
       <div class="form-group">
-        <div class="form-label">Offers found on your account</div>
+        <div class="form-label" id="offer-list-label">Offers found on your account</div>
         <div class="offer-list-wrap" id="offer-list"></div>
-        <div class="divider-or">— or type manually —</div>
+        <div id="divider-or" class="divider-or">— or type manually —</div>
         <input class="form-input" id="inp-offer-manual" placeholder="Offer name (if not listed above)…"/>
       </div>
       <div class="status-msg" id="offer-status"></div>
@@ -652,11 +652,11 @@ function restoreAll(){
    PLATFORM CONFIGS
 ══════════════════════════════════════════ */
 const PLAT={
-  Explodely:{color:'#ff5500',needsSecret:false,needsUsername:true, secretLabel:'',         userLabel:'Explodely Username'},
-  JVzoo:    {color:'#0077cc',needsSecret:false,needsUsername:true, secretLabel:'',         userLabel:'JVzoo Username'},
-  Clickbank:{color:'#00aa44',needsSecret:true, needsUsername:false,secretLabel:'Clerk Key (Dev Key)',userLabel:''},
-  Cartpanda:{color:'#9900cc',needsSecret:false,needsUsername:false,secretLabel:'',         userLabel:''},
-  Digistore:{color:'#cc7700',needsSecret:false,needsUsername:false,secretLabel:'',         userLabel:''},
+  Explodely:{color:'#ff5500',needsSecret:false,needsUsername:true, noOfferList:true, secretLabel:'',userLabel:'Explodely Username'},
+  JVzoo:    {color:'#0077cc',needsSecret:false,needsUsername:true, noOfferList:false,secretLabel:'',userLabel:'JVzoo Username'},
+  Clickbank:{color:'#00aa44',needsSecret:true, needsUsername:false,noOfferList:false,secretLabel:'Clerk Key (Dev Key)',userLabel:''},
+  Cartpanda:{color:'#9900cc',needsSecret:false,needsUsername:false,noOfferList:false,secretLabel:'',userLabel:''},
+  Digistore:{color:'#cc7700',needsSecret:false,needsUsername:false,noOfferList:false,secretLabel:'',userLabel:''},
 };
 
 /* ══════════════════════════════════════════
@@ -675,6 +675,11 @@ function openAddOffer(col){
   document.querySelectorAll('.plat-chip').forEach(c=>c.classList.remove('selected'));
   document.getElementById('mo-title').textContent='🩸 Connect Live Offer';
   document.getElementById('creds-saved-banner').innerHTML='';
+  /* Reset offer-list visibility for platforms that have a listing */
+  document.getElementById('offer-list').style.display='';
+  document.getElementById('divider-or').style.display='';
+  document.getElementById('offer-list-label').textContent='Offers found on your account';
+  document.getElementById('inp-offer-manual').placeholder='Offer name (if not listed above)…';
   showStep('step-plat');
   document.getElementById('modal-offer').classList.add('open');
 }
@@ -698,16 +703,18 @@ function choosePlatform(el){
   document.getElementById('creds-status').textContent='';
 
   const saved=getCredFor(MP);
+  const noList=cfg.noOfferList;
   const banner=document.getElementById('creds-saved-banner');
   if(saved){
     const uname=saved.username?` (${saved.username})`:'';
-    banner.innerHTML=`<div class="saved-creds-banner">✓ ${MP} credentials saved${uname} — click below to fetch your offers <button class="change-creds" onclick="clearAndReenter('${MP}')">Change</button></div>`;
+    const btnLbl=noList?'Continue →':'Fetch Offers →';
+    banner.innerHTML=`<div class="saved-creds-banner">✓ ${MP} credentials saved${uname} <button class="change-creds" onclick="clearAndReenter('${MP}')">Change</button></div>`;
     document.getElementById('creds-form-area').style.display='none';
-    document.getElementById('btn-fetch').textContent='Fetch Offers →';
+    document.getElementById('btn-fetch').textContent=btnLbl;
   } else {
     banner.innerHTML='';
     document.getElementById('creds-form-area').style.display='';
-    document.getElementById('btn-fetch').textContent='Fetch Offers from Account →';
+    document.getElementById('btn-fetch').textContent=noList?'Save & Continue →':'Fetch Offers from Account →';
   }
   showStep('step-creds');
 }
@@ -735,11 +742,32 @@ async function submitCreds(){
     if(cfg.needsUsername&&!username){document.getElementById('inp-username').style.borderColor='rgba(220,0,0,.7)';setTimeout(()=>document.getElementById('inp-username').style.borderColor='',1200);return;}
     saveCreds(MP,apiKey,apiSec,username);
   }
+  const cfg2=PLAT[MP]||{};
+  if(cfg2.noOfferList){
+    /* Platform has no offer listing — skip directly to name entry */
+    goToNameEntry();
+    return;
+  }
   const st=document.getElementById('creds-status');
   st.className='status-msg loading show';st.textContent=`Connecting to ${MP}…`;
   document.getElementById('btn-fetch').disabled=true;
   await loadOffers(MP,{apiKey,apiSecret:apiSec,username});
   document.getElementById('btn-fetch').disabled=false;
+}
+
+function goToNameEntry(){
+  /* For platforms with no offer listing API (e.g. Explodely) */
+  document.getElementById('offer-list').style.display='none';
+  document.getElementById('divider-or').style.display='none';
+  document.getElementById('offer-list-label').textContent='Your Offer Name';
+  document.getElementById('inp-offer-manual').placeholder='e.g. "Keto Breakthrough", "Muscle Max Pro"…';
+  document.getElementById('inp-offer-manual').value='';
+  const st=document.getElementById('offer-status');
+  st.className='status-msg success show';
+  st.textContent=`✓ ${MP} credentials saved — enter your offer name and we'll pull all your real sales data`;
+  document.getElementById('mo-title').textContent=`💰 Name Your Offer — ${MP}`;
+  setTimeout(()=>document.getElementById('inp-offer-manual').focus(),80);
+  showStep('step-offers');
 }
 
 async function loadOffers(plat,creds){
