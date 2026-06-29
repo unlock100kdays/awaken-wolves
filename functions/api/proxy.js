@@ -352,24 +352,183 @@ async function explodely(username, apiKey, action) {
 }
 
 /* ─── JVZOO ──────────────────────────────────────────────────────────────── */
-async function jvzoo(username, apiKey, action, offerId) {
-  const base = 'https://api.jvzoo.com/v1';
-  const auth = 'Basic ' + btoa(`${username}:${apiKey}`);
-  const h    = { Authorization: auth, Accept: 'application/json' };
-  if (action === 'fetchOffers') {
-    const r = await fetch(`${base}/products`, { headers: h });
-    if (!r.ok) throw new Error(`JVzoo HTTP ${r.status}`);
-    const d = await r.json();
-    const arr = d?.products || d?.data || d?.items || d || [];
-    return { success: true, offers: Array.isArray(arr) ? arr.map(p=>({id:String(p.id||''),name:String(p.name||p.title||'')})).filter(o=>o.name) : [] };
-  }
+/* Auth: Basic — API Key as username, literal "x" as password (per JVZoo docs) */
+async function jvzoo(username, apiKey, action) {
+  const h = {
+    Authorization: 'Basic ' + btoa(`${apiKey}:x`),
+    Accept: 'application/json',
+  };
+
   if (action === 'fetchStats') {
-    const [s, a] = await Promise.allSettled([
-      fetch(`${base}/products/${offerId}/statistics`, { headers: h }).then(r=>r.json()),
-      fetch(`${base}/products/${offerId}/affiliates?limit=10&sort=revenue&order=desc`, { headers: h }).then(r=>r.json()),
-    ]);
-    return { success: true, raw: s.status==='fulfilled'?s.value:{}, affRaw: a.status==='fulfilled'?a.value:{} };
+    /* Paginate /v3.0/transactions — 100 per page, cap at 200 pages (20k tx) */
+    const all = [];
+    let page = 1;
+    let fetchErr = null;
+
+    while (page <= 200) {
+      const q = new URLSearchParams({ page: String(page), per_page: '100' });
+      const r = await fetch(`https://api.jvzoo.com/v3.0/transactions?${q}`, { headers: h });
+
+      if (!r.ok) {
+        const t = await r.text().catch(() => '');
+        fetchErr = `JVZoo API HTTP ${r.status}${t.length > 5 ? ': ' + t.slice(0, 300) : ' (no body)'}`;
+        break;
+      }
+
+      const d = await r.json().catch(() => null);
+      if (!d) { fetchErr = 'JVZoo returned non-JSON response'; break; }
+
+      const tx = Array.isArray(d) ? d
+        : (d?.transactions || d?.data || d?.items || d?.results || []);
+
+      if (!Array.isArray(tx) || tx.length === 0) break;
+      for (const t of tx) all.push(t);
+      if (tx.length < 100) break;
+      page++;
+    }
+
+    if (all.length === 0 && fetchErr) return { success: false, error: fetchErr };
+    if (all.length === 0) return { success: false, error: 'JVZoo returned 0 transactions — check API key.' };
+
+    /* ── Compute stats from raw transactions ── */
+    const now   = Math.floor(Date.now() / 1000);
+    const todayMid   = Math.floor(new Date(new Date().setUTCHours(0,0,0,0)).getTime() / 1000);
+    const ydayMid    = todayMid - 86400;
+    const mid7       = todayMid - 6 * 86400;
+    const mid30      = todayMid - 29 * 86400;
+
+    let gross = 0, refundAmt = 0, cbAmt = 0;
+    let orders = 0, refunds = 0, cbs = 0;
+    let todayRev = 0, ydayRev = 0, rev7 = 0, rev30 = 0;
+    let lastSaleTs = 0;
+    const emails   = new Set();
+    const prodMap  = {};
+    const affMap   = {};
+    const recentTx = [];
+
+    for (const tx of all) {
+      /* Amount — try multiple field names */
+      const amt = parseFloat(
+        tx.amount ?? tx.price ?? tx.total ?? tx.sale_price ?? tx.gross ?? 0
+      ) || 0;
+
+      /* Type — SALE, REFUND, CGBK, CANCEL-REBILL */
+      const typeRaw = String(tx.type ?? tx.transaction_type ?? tx.txn_type ?? 'SALE').toUpperCase();
+      const isRef  = typeRaw.includes('REFUND');
+      const isCB   = typeRaw.includes('CGBK') || typeRaw.includes('CHARGEBACK');
+      const isSale = !isRef && !isCB;
+      const isRebill = typeRaw.includes('REBILL');
+
+      /* Timestamp */
+      let ts = 0;
+      if (tx.timestamp) ts = parseInt(tx.timestamp) || 0;
+      if (!ts) {
+        const raw = tx.created_at ?? tx.date ?? tx.purchase_date ?? tx.transaction_date ?? tx.time ?? '';
+        if (raw) { const d = new Date(raw); if (!isNaN(d)) ts = Math.floor(d.getTime() / 1000); }
+      }
+
+      /* Customer / affiliate */
+      const email   = (tx.customer_email ?? tx.email ?? tx.buyer_email ?? '').toLowerCase();
+      const pid     = String(tx.product_id ?? tx.product?.id ?? tx.productId ?? '_unk');
+      const pname   = tx.product_name ?? tx.product?.name ?? tx.productName ?? tx.title ?? pid;
+      const affId   = String(tx.affiliate_id ?? tx.affiliate?.id ?? tx.affiliateId ?? '');
+      const affName = tx.affiliate_name ?? tx.affiliate?.name ?? tx.affiliateName ?? tx.affiliate ?? '';
+      const country = tx.country ?? tx.customer_country ?? tx.buyer_country ?? '';
+
+      if (email) emails.add(email);
+
+      /* Revenue buckets */
+      if (isSale) {
+        gross += amt;
+        orders++;
+        if (ts >= todayMid)              todayRev += amt;
+        if (ts >= ydayMid && ts < todayMid) ydayRev  += amt;
+        if (ts >= mid7)                  rev7     += amt;
+        if (ts >= mid30)                 rev30    += amt;
+        if (ts > lastSaleTs)             lastSaleTs = ts;
+      } else if (isRef) {
+        refundAmt += amt; refunds++;
+      } else if (isCB) {
+        cbAmt += amt; cbs++;
+      }
+
+      /* Per-product */
+      if (!prodMap[pid]) prodMap[pid] = { id:pid, name:pname, revenue:0, orders:0, refunds:0, refundAmount:0, chargebacks:0, cbAmount:0, today:0, week7:0, week30:0 };
+      const p = prodMap[pid];
+      if (isRef)       { p.revenue -= amt; p.refunds++;     p.refundAmount += amt; }
+      else if (isCB)   { p.revenue -= amt; p.chargebacks++; p.cbAmount     += amt; }
+      else             { p.revenue += amt; p.orders++;
+                         if (ts >= todayMid) p.today  += amt;
+                         if (ts >= mid7)     p.week7  += amt;
+                         if (ts >= mid30)    p.week30 += amt; }
+
+      /* Affiliates */
+      if (affId && affId !== '') {
+        if (!affMap[affId]) affMap[affId] = { id:affId, name:affName||affId, sales:0, revenue:0 };
+        if (isSale) { affMap[affId].sales++; affMap[affId].revenue += amt; }
+      }
+
+      /* Recent transactions (latest 25) */
+      if (recentTx.length < 25) {
+        const dateStr = ts ? new Date(ts*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '';
+        recentTx.push({
+          date: dateStr,
+          type: isRef ? 'refund' : isCB ? 'chargeback' : 'sale',
+          amount: amt,
+          customer: tx.customer_name ?? tx.name ?? (email ? email.split('@')[0] : '—'),
+          country,
+          affiliate: affName || (affId || ''),
+          rebill: isRebill,
+        });
+      }
+    }
+
+    const netRev  = gross - refundAmt - cbAmt;
+    const refRate = orders > 0 ? refunds / orders * 100 : 0;
+    const cbRate  = orders > 0 ? cbs     / orders * 100 : 0;
+
+    const prods = Object.values(prodMap)
+      .sort((a, b) => b.revenue - a.revenue)
+      .map(p => ({ ...p, aov: p.orders > 0 ? p.revenue / p.orders : 0, refundRate: p.orders > 0 ? p.refunds / p.orders * 100 : 0, cbRate: p.orders > 0 ? p.chargebacks / p.orders * 100 : 0 }));
+
+    const affs = Object.values(affMap)
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 20)
+      .map((a, i) => ({ ...a, rank: i + 1 }));
+
+    const lastSaleDate = lastSaleTs
+      ? new Date(lastSaleTs * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()
+      : '';
+
+    return {
+      success: true,
+      raw: {
+        total_revenue:      gross,
+        net_revenue:        netRev,
+        today_revenue:      todayRev,
+        yesterday_revenue:  ydayRev,
+        revenue_7_days:     rev7,
+        revenue_30_days:    rev30,
+        total_orders:       orders,
+        unique_customers:   emails.size,
+        avg_order_value:    orders > 0 ? gross / orders : 0,
+        customer_ltv:       emails.size > 0 ? netRev / emails.size : 0,
+        refund_rate:        refRate,
+        refund_amount:      refundAmt,
+        total_refunds:      refunds,
+        chargeback_rate:    cbRate,
+        chargeback_amount:  cbAmt,
+        total_chargebacks:  cbs,
+        last_sale_date:     lastSaleDate,
+        top_products:       prods,
+        affiliates:         affs,
+        recent_transactions: recentTx,
+      },
+      _counts: { total: all.length, pages: page - 1 },
+      _sample: all[0] || null,
+    };
   }
+
   return { success: false, error: 'Unknown action' };
 }
 

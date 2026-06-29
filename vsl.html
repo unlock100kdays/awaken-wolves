@@ -515,7 +515,7 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
           <input class="form-input" id="inp-username" type="text" placeholder="Your platform username…" autocomplete="username"/>
         </div>
         <div class="form-group">
-          <label class="form-label">API Key</label>
+          <label class="form-label" id="apikey-label">API Key</label>
           <input class="form-input" id="inp-api-key" type="password" placeholder="Paste your API key…" autocomplete="new-password"/>
         </div>
         <div class="form-group" id="secret-row">
@@ -673,11 +673,11 @@ function restoreAll(){
    PLATFORM CONFIGS
 ══════════════════════════════════════════ */
 const PLAT={
-  Explodely:{color:'#ff5500',needsSecret:false,needsUsername:true, noOfferList:true, secretLabel:'',userLabel:'Explodely Username'},
-  JVzoo:    {color:'#0077cc',needsSecret:false,needsUsername:true, noOfferList:false,secretLabel:'',userLabel:'JVzoo Username'},
-  Clickbank:{color:'#00aa44',needsSecret:true, needsUsername:false,noOfferList:false,secretLabel:'Clerk Key (Dev Key)',userLabel:''},
-  Cartpanda:{color:'#9900cc',needsSecret:false,needsUsername:false,noOfferList:false,secretLabel:'',userLabel:''},
-  Digistore:{color:'#cc7700',needsSecret:false,needsUsername:false,noOfferList:false,secretLabel:'',userLabel:''},
+  Explodely:{color:'#ff5500',needsSecret:false,needsUsername:true, noOfferList:true, secretLabel:'',              userLabel:'Explodely Username',  apikeyLabel:'API Key',           apikeyPlaceholder:'Paste your Explodely API key…'},
+  JVzoo:    {color:'#0077cc',needsSecret:false,needsUsername:false,noOfferList:true, secretLabel:'',              userLabel:'',                    apikeyLabel:'JVZoo API Key (IPN Secret Key)', apikeyPlaceholder:'e.g. 51oyMifuooiMeNvy23xQ'},
+  Clickbank:{color:'#00aa44',needsSecret:true, needsUsername:false,noOfferList:false,secretLabel:'Clerk Key',     userLabel:'',                    apikeyLabel:'Dev API Key',       apikeyPlaceholder:'Paste your Clickbank dev key…'},
+  Cartpanda:{color:'#9900cc',needsSecret:false,needsUsername:false,noOfferList:false,secretLabel:'',              userLabel:'',                    apikeyLabel:'API Key',           apikeyPlaceholder:'Paste your Cartpanda API key…'},
+  Digistore:{color:'#cc7700',needsSecret:false,needsUsername:false,noOfferList:false,secretLabel:'',              userLabel:'',                    apikeyLabel:'API Key',           apikeyPlaceholder:'Paste your Digistore24 API key…'},
 };
 
 /* ══════════════════════════════════════════
@@ -717,6 +717,8 @@ function choosePlatform(el){
   document.getElementById('secret-label').textContent=cfg.secretLabel||'API Secret';
   document.getElementById('username-row').style.display=cfg.needsUsername?'':'none';
   document.getElementById('username-label').textContent=cfg.userLabel||'Username';
+  document.getElementById('apikey-label').textContent=cfg.apikeyLabel||'API Key';
+  document.getElementById('inp-api-key').placeholder=cfg.apikeyPlaceholder||'Paste your API key…';
   document.getElementById('inp-api-key').value='';
   document.getElementById('inp-api-secret').value='';
   document.getElementById('inp-username').value='';
