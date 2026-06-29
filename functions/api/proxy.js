@@ -365,19 +365,32 @@ async function jvzoo(username, apiKey, action) {
     let page = 1;
     let fetchErr = null;
 
+    /* Probe page 1 with no pagination params to discover what JVZoo accepts */
+    let paramStyle = null; // will be set on first successful response
+
     while (page <= 200) {
-      const q = new URLSearchParams({ page: String(page), per_page: '100' });
+      let q;
+      if (paramStyle === 'limit') {
+        q = new URLSearchParams({ limit: '100', page: String(page) });
+      } else if (paramStyle === 'per_page') {
+        q = new URLSearchParams({ per_page: '100', page: String(page) });
+      } else {
+        q = new URLSearchParams({}); // first call: no params, discover format
+      }
+
       const r = await fetch(`https://api.jvzoo.com/v3.0/transactions?${q}`, { headers: h });
 
       if (!r.ok) {
         let errMsg = `JVZoo HTTP ${r.status}`;
+        let errDetail = '';
         try {
           const errData = await r.json();
           const msg = errData?.meta?.status?.message || errData?.message || errData?.error;
+          const detail = errData?.meta?.status?.detail;
           if (msg) errMsg += `: ${msg}`;
-          if (r.status === 401) errMsg += ' — go to JVZoo Account → Settings → API to find your real API Key (different from IPN Secret Key)';
+          if (detail) errDetail = ` (${JSON.stringify(detail)})`;
         } catch { /* ignore */ }
-        fetchErr = errMsg;
+        fetchErr = errMsg + errDetail;
         break;
       }
 
@@ -389,12 +402,22 @@ async function jvzoo(username, apiKey, action) {
 
       if (!Array.isArray(tx) || tx.length === 0) break;
       for (const t of tx) all.push(t);
-      if (tx.length < 100) break;
+
+      /* Detect pagination style from meta on first page */
+      if (paramStyle === null) {
+        const perPageVal = d?.meta?.per_page ?? d?.meta?.limit ?? d?.pagination?.per_page ?? d?.pagination?.limit ?? null;
+        paramStyle = (perPageVal !== null || d?.meta?.total_pages !== undefined) ? 'per_page' : 'limit';
+      }
+
+      /* Check if more pages exist */
+      const totalPages = d?.meta?.total_pages ?? d?.meta?.last_page ?? d?.pagination?.total_pages ?? null;
+      const hasNextPage = d?.meta?.next_page ?? d?.links?.next ?? (totalPages !== null ? page < totalPages : null);
+      if (hasNextPage === false || hasNextPage === null && tx.length < 100) break;
       page++;
     }
 
     if (all.length === 0 && fetchErr) return { success: false, error: fetchErr };
-    if (all.length === 0) return { success: false, error: 'JVZoo returned 0 transactions — check API key.' };
+    if (all.length === 0) return { success: false, error: 'JVZoo returned 0 transactions. Check API key or account has no sales.' };
 
     /* ── Compute stats from raw transactions ── */
     const now   = Math.floor(Date.now() / 1000);
