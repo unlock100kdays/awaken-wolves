@@ -44,26 +44,48 @@ function exDate(d) {
   return `${String(d.getUTCDate()).padStart(2,'0')}-${MNAMES[d.getUTCMonth()]}-${d.getUTCFullYear()}`;
 }
 function today()    { return exDate(new Date()); }
+function tomorrow() { return exDate(new Date(Date.now() + 86400000)); }
 function daysAgo(n) { return exDate(new Date(Date.now() - n * 86400000)); }
 
-/* Parse "HH:MM:SS DD-MMM-YYYY" → Unix timestamp (seconds).
-   Falls back to saletimestamp if present. */
+/* Parse saletimedate → Unix timestamp (seconds).
+   Handles multiple formats the API may return:
+     ISO:      "2026-06-29"  or  "2026-06-29T14:30:00"
+     IPN docs: "14:30:00 29-JUN-2026"  or  "29-JUN-2026 14:30:00"
+   Always prefers saletimestamp (Unix) when present and non-zero. */
 function saleTs(s) {
   if (s.saletimestamp) {
     const ts = parseInt(s.saletimestamp);
     if (ts > 0) return ts;
   }
-  if (s.saletimedate) {
-    // e.g. "14:30:00 30-JUN-2026" or "30-JUN-2026 14:30:00"
-    const parts = s.saletimedate.trim().split(/\s+/);
-    const datePart = parts.find(p => p.includes('-') && p.length > 6) || parts[1] || parts[0];
+  const raw = (s.saletimedate || '').trim();
+  if (!raw) return 0;
+
+  /* ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS */
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) {
+    return Math.floor(new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3])).getTime() / 1000);
+  }
+
+  /* IPN format: "HH:MM:SS DD-MMM-YYYY" or "DD-MMM-YYYY HH:MM:SS" */
+  const parts = raw.split(/\s+/);
+  /* Pick the part that looks like DD-MMM-YYYY (has two dashes, not all digits) */
+  const datePart = parts.find(p => /^[0-3]\d-[A-Za-z]{3}-\d{4}$/.test(p));
+  if (datePart) {
     const [d, m, y] = datePart.split('-');
-    const monthIdx = MNAMES.indexOf((m||'').toLowerCase());
-    if (y && monthIdx !== -1) {
-      return Math.floor(new Date(Date.UTC(parseInt(y), monthIdx, parseInt(d))).getTime() / 1000);
+    const monthIdx = MNAMES.indexOf(m.toLowerCase());
+    if (monthIdx !== -1) {
+      return Math.floor(new Date(Date.UTC(+y, monthIdx, +d)).getTime() / 1000);
     }
   }
   return 0;
+}
+
+/* Format a saletimedate value for display — strips time, normalises to DD-MMM-YYYY */
+function fmtSaleDate(raw) {
+  if (!raw) return '';
+  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[3]}-${MNAMES[+iso[2]-1].toUpperCase()}-${iso[1]}`;
+  return raw.replace(/^\d\d:\d\d:\d\d /, '').replace(/ \d\d:\d\d:\d\d$/, '');
 }
 
 /* ─── EXPLODELY ──────────────────────────────────────────────────────────────
@@ -129,10 +151,10 @@ async function explodely(username, apiKey, action) {
     /* Try progressively shorter ranges if the long one fails */
     let all = [];
     const ranges = [
-      ['01-jan-2020', today()],  // all-time (6 years)
-      [daysAgo(730),  today()],  // 2 years fallback
-      [daysAgo(365),  today()],  // 1 year fallback
-      [daysAgo(90),   today()],  // 90 days last-resort
+      ['01-jan-2020', tomorrow()],  // all-time — enddate = tomorrow avoids timezone cutoff
+      [daysAgo(730),  tomorrow()],  // 2 years fallback
+      [daysAgo(365),  tomorrow()],  // 1 year fallback
+      [daysAgo(90),   tomorrow()],  // 90 days last-resort
     ];
     let fetchError = null;
     for (const [start, end] of ranges) {
@@ -268,8 +290,7 @@ async function explodely(username, apiKey, action) {
     }));
 
     /* Format last sale date neatly */
-    const lastSaleRaw  = sorted[0]?.saletimedate || '';
-    const lastSaleFmt  = lastSaleRaw.replace(/^\d\d:\d\d:\d\d /, ''); // strip time, keep date
+    const lastSaleFmt = fmtSaleDate(sorted[0]?.saletimedate || '');
 
     return {
       success: true,
