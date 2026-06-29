@@ -388,48 +388,47 @@ async function jvzoo(username, apiKey, action) {
     /* Add current partial month */
     chunks.push({ start: isoYM(endYear, endMonth), end: isoTomorrow });
 
-    /* Fetch one page; returns { tx, totalPages } or null on error */
+    /* Fetch one page safely; returns { tx, totalPages } or null */
     const fetchPage = async (start_date, end_date, page) => {
-      const q = new URLSearchParams({ start_date, end_date, page: String(page), limit: '100', per_page: '100' });
-      const r = await fetch(`https://api.jvzoo.com/v3.0/transactions?${q}`, { headers: h });
-      if (!r.ok) return null;
-      const d = await r.json().catch(() => null);
-      if (!d) return null;
-      const tx = Array.isArray(d) ? d : (d?.transactions || d?.data || d?.items || d?.results || []);
-      const totalPages = d?.meta?.total_pages ?? d?.meta?.last_page ?? null;
-      return { tx: Array.isArray(tx) ? tx : [], totalPages };
+      try {
+        const q = new URLSearchParams({ start_date, end_date, page: String(page), limit: '100', per_page: '100' });
+        const r = await fetch(`https://api.jvzoo.com/v3.0/transactions?${q}`, { headers: h });
+        if (!r.ok) return null;
+        const d = await r.json().catch(() => null);
+        if (!d) return null;
+        const tx = Array.isArray(d) ? d : (d?.transactions || d?.data || d?.items || d?.results || []);
+        const totalPages = d?.meta?.total_pages ?? d?.meta?.last_page ?? null;
+        return { tx: Array.isArray(tx) ? tx : [], totalPages };
+      } catch { return null; }
     };
 
-    const addTx = (tx) => {
-      for (const t of tx) {
+    const addTx = (txList) => {
+      for (const t of txList) {
         const key = String(t.transaction_id ?? t.id ?? `${t.sale_date}|${t.amount}|${t.customer_email}`);
         if (!seen.has(key)) { seen.add(key); all.push(t); }
       }
     };
 
     for (const chunk of chunks) {
-      /* Page 1 first — discovers total page count from meta */
+      /* Page 1 first — get data + discover total pages from meta */
       const first = await fetchPage(chunk.start, chunk.end, 1);
       if (!first || first.tx.length === 0) continue;
       addTx(first.tx);
 
-      const knownTotal = first.totalPages;
-      const MAX_PAGES  = knownTotal ?? 200; /* cap at 200 if API doesn't report total */
-      const CONCURRENCY = 15;
+      const knownTotal  = first.totalPages;
+      const MAX_PAGES   = knownTotal ?? 100;
+      const CONCURRENCY = 5; /* conservative to avoid rate-limiting */
 
-      /* Fetch remaining pages in concurrent batches of 15 */
       for (let p = 2; p <= MAX_PAGES; p += CONCURRENCY) {
-        const batch = [];
-        for (let pp = p; pp < p + CONCURRENCY && pp <= MAX_PAGES; pp++) {
-          batch.push(fetchPage(chunk.start, chunk.end, pp));
-        }
-        const results = await Promise.all(batch);
+        const batchNums = [];
+        for (let pp = p; pp < p + CONCURRENCY && pp <= MAX_PAGES; pp++) batchNums.push(pp);
+        const results = await Promise.allSettled(batchNums.map(pp => fetchPage(chunk.start, chunk.end, pp)));
         let hitEmpty = false;
-        for (const res of results) {
+        for (const r of results) {
+          const res = r.status === 'fulfilled' ? r.value : null;
           if (!res || res.tx.length === 0) { hitEmpty = true; continue; }
           addTx(res.tx);
         }
-        /* If we got an empty page and total was unknown, we've exhausted this chunk */
         if (hitEmpty && knownTotal === null) break;
       }
     }
