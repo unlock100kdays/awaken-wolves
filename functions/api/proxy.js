@@ -370,8 +370,14 @@ async function jvzoo(username, apiKey, action) {
       const r = await fetch(`https://api.jvzoo.com/v3.0/transactions?${q}`, { headers: h });
 
       if (!r.ok) {
-        const t = await r.text().catch(() => '');
-        fetchErr = `JVZoo API HTTP ${r.status}${t.length > 5 ? ': ' + t.slice(0, 300) : ' (no body)'}`;
+        let errMsg = `JVZoo HTTP ${r.status}`;
+        try {
+          const errData = await r.json();
+          const msg = errData?.meta?.status?.message || errData?.message || errData?.error;
+          if (msg) errMsg += `: ${msg}`;
+          if (r.status === 401) errMsg += ' — go to JVZoo Account → Settings → API to find your real API Key (different from IPN Secret Key)';
+        } catch { /* ignore */ }
+        fetchErr = errMsg;
         break;
       }
 
