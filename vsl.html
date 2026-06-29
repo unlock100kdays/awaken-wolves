@@ -865,9 +865,12 @@ async function apiFetchOffers(plat,creds){
 async function apiFetchStats(plat,creds,offerId,offerName){
   try{
     const d=await callProxy({platform:plat,apiKey:creds.apiKey,apiSecret:creds.apiSecret||'',username:creds.username||'',action:'fetchStats',offerId});
-    return{data:parseStats(plat,d.raw||{},d.affRaw||{},offerName)};
+    /* Debug: log raw proxy response + sample sale to console */
+    console.log(`[${plat}] proxy response:`,JSON.stringify(d,null,2));
+    return{data:parseStats(plat,d.raw||{},d.affRaw||{},offerName),_debug:{counts:d._counts,sample:d._sample}};
   }catch(e){
-    return{data:genFallback(offerName)};
+    console.error(`[${plat}] fetchStats error:`,e.message);
+    return{data:genFallback(offerName),_error:e.message};
   }
 }
 
@@ -891,16 +894,17 @@ function parseStats(plat,raw,affRaw,name){
   })();
 
   return{
-    revenueAllTime:  fmt(s.total_revenue||s.revenue_all_time||s.gross_revenue||0),
-    revenueToday:    fmt(s.today_revenue||s.revenue_today||s.daily_revenue||0),
-    revenueYesterday:fmt(s.yesterday_revenue||s.revenue_yesterday||0),
-    revenue7Days:    fmt(s.revenue_7_days||s.last_7_days||s.weekly_revenue||0),
-    totalOrders:     n(s.total_orders||s.orders_count||s.sales_count||0).toLocaleString(),
-    avgOrderValue:   fmt(s.avg_order_value||s.aov||0),
-    conversionRate:  fmtPct(s.conversion_rate||s.cvr||0),
-    epc:             '$'+n(s.epc||0).toFixed(2),
-    refundRate:      refRaw>1?refRaw.toFixed(1)+'%':(refRaw*100).toFixed(1)+'%',
-    chargebackRate:  cbRaw>1?cbRaw.toFixed(2)+'%':(cbRaw*100).toFixed(2)+'%',
+    revenueAllTime:   fmt(s.total_revenue||s.revenue_all_time||s.gross_revenue||0),
+    revenueToday:     fmt(s.today_revenue||s.revenue_today||s.daily_revenue||0),
+    revenueYesterday: fmt(s.yesterday_revenue||s.revenue_yesterday||0),
+    revenue7Days:     fmt(s.revenue_7_days||s.last_7_days||s.weekly_revenue||0),
+    revenue30Days:    s.revenue_30_days!=null ? fmt(s.revenue_30_days) : null,
+    totalOrders:      n(s.total_orders||s.orders_count||s.sales_count||0).toLocaleString(),
+    avgOrderValue:    fmt(s.avg_order_value||s.aov||0),
+    conversionRate:   fmtPct(s.conversion_rate||s.cvr||0),
+    epc:              '$'+n(s.epc||0).toFixed(2),
+    refundRate:       refRaw.toFixed(1)+'%',
+    chargebackRate:   cbRaw.toFixed(2)+'%',
     /* Explodely-specific extras */
     directRevenue:    s.direct_revenue!=null   ? fmt(s.direct_revenue)   : null,
     affiliateRevenue: s.affiliate_revenue!=null ? fmt(s.affiliate_revenue): null,
@@ -1041,6 +1045,7 @@ function createOfferCard(name,platform,data,col,id,offerId,fromRestore){
         <div class="df-item"><span class="df-label">Revenue Today</span><span class="df-value green" data-today="1">${data.revenueToday||'—'}</span></div>
         <div class="df-item"><span class="df-label">Revenue Yesterday</span><span class="df-value green">${data.revenueYesterday||'—'}</span></div>
         <div class="df-item"><span class="df-label">Last 7 Days</span><span class="df-value green">${data.revenue7Days||'—'}</span></div>
+        ${data.revenue30Days!=null?`<div class="df-item"><span class="df-label">Last 30 Days</span><span class="df-value green">${data.revenue30Days}</span></div>`:''}
         <div class="df-item"><span class="df-label">Total Orders</span><span class="df-value">${data.totalOrders||'—'}</span></div>
         <div class="df-item"><span class="df-label">Avg Order Value</span><span class="df-value green">${data.avgOrderValue||'—'}</span></div>
         <div class="df-item"><span class="df-label">Refund Rate</span><span class="df-value ${rCls}">${data.refundRate||'—'}</span></div>
