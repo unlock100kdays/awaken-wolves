@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VSL Operations — Awaken Wolves</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --dark:#040407;--panel:#09090e;--panel2:#0e0e15;
+  --red:#cc1100;--blood:#8b0000;--ember:#ff4400;
+  --silver:#8a96a3;--text:#d8d8e0;--border:rgba(180,0,0,0.14);
+}
+html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;background:var(--dark);color:var(--text);overflow:hidden}
+#bg{position:fixed;inset:0;z-index:0;pointer-events:none}
+.shell{display:flex;height:100vh;overflow:hidden;position:relative;z-index:1}
+
+/* SIDEBAR */
+.sidebar{width:220px;min-width:220px;height:100vh;background:rgba(6,6,10,0.97);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;backdrop-filter:blur(8px)}
+.logo{padding:20px 18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.logo svg{width:34px;height:34px;flex-shrink:0;filter:drop-shadow(0 0 8px rgba(200,0,0,0.55))}
+.logo-text{display:flex;flex-direction:column}
+.logo-name{font-size:.82rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#e0e0e0}
+.logo-tag{font-size:.58rem;letter-spacing:.15em;text-transform:uppercase;color:var(--red)}
+.nav{display:flex;flex-direction:column;padding:12px 0;flex:1}
+.nav-section{font-size:.58rem;letter-spacing:.2em;text-transform:uppercase;color:var(--silver);padding:12px 18px 5px;opacity:.5}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 18px;font-size:.8rem;color:var(--silver);cursor:pointer;border-left:2px solid transparent;transition:all .2s;text-decoration:none}
+.nav-item:hover,.nav-item.active{color:var(--text);border-left-color:var(--red);background:rgba(180,0,0,0.07)}
+.nav-icon{width:14px;height:14px;opacity:.7;flex-shrink:0}
+.sidebar-footer{padding:14px 18px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#8b0000,#cc1100);display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;color:#fff;flex-shrink:0;border:1px solid rgba(204,17,0,0.4)}
+.user-info{display:flex;flex-direction:column}
+.user-name{font-size:.8rem;font-weight:600;color:var(--text)}
+.user-role{font-size:.6rem;color:var(--red);letter-spacing:.08em}
+
+/* TOPBAR */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{padding:12px 28px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:rgba(6,6,10,0.95);flex-shrink:0;backdrop-filter:blur(8px)}
+.topbar-left{display:flex;flex-direction:column;gap:3px}
+.wolf-greeting{display:flex;align-items:center;gap:10px}
+.wolf-badge{font-size:.6rem;letter-spacing:.15em;text-transform:uppercase;background:rgba(180,0,0,0.12);color:var(--red);border:1px solid rgba(180,0,0,0.28);border-radius:20px;padding:3px 10px;display:flex;align-items:center;gap:6px}
+.wolf-badge::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--red);animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.page-title{font-size:1.15rem;font-weight:700;letter-spacing:.06em;background:linear-gradient(90deg,#fff 0%,#cc1100 60%,#ff5500 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.page-sub{font-size:.68rem;color:var(--silver);letter-spacing:.06em}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.search{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:4px;padding:8px 14px;font-size:.8rem;color:var(--text);outline:none;width:200px}
+.search::placeholder{color:rgba(138,150,163,0.35)}
+.search:focus{border-color:rgba(180,0,0,0.35)}
+.top-avatar{width:34px;height:34px;border-radius:4px;background:linear-gradient(135deg,#8b0000,#cc1100);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:#fff;border:1px solid rgba(180,0,0,0.4);cursor:pointer}
+.notif{width:34px;height:34px;border-radius:4px;border:1px solid var(--border);background:rgba(255,255,255,0.02);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;color:var(--silver);font-size:1rem}
+.ndot{position:absolute;top:7px;right:7px;width:5px;height:5px;border-radius:50%;background:var(--red)}
+
+/* CONTENT */
+.vsl-content{flex:1;overflow-y:auto;padding:24px 28px 40px;position:relative}
+.vsl-content::-webkit-scrollbar{width:4px}
+.vsl-content::-webkit-scrollbar-thumb{background:rgba(180,0,0,0.25);border-radius:2px}
+
+/* VEIN SVG OVERLAY */
+.vein-svg{position:absolute;top:0;left:0;pointer-events:none;z-index:0;overflow:visible}
+
+/* RUNNING OPS BANNER */
+.run-banner{
+  position:relative;z-index:1;
+  background:linear-gradient(135deg,rgba(10,4,4,0.97),rgba(18,4,4,0.94));
+  border:1px solid rgba(140,0,0,0.35);border-radius:10px;
+  padding:16px 28px;margin-bottom:20px;
+  display:flex;align-items:center;gap:16px;
+  overflow:hidden;
+}
+.run-banner::before{content:'';position:absolute;top:0;left:0;right:0;height:1.5px;background:linear-gradient(90deg,transparent,#cc1100,transparent)}
+.run-banner::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(120,0,0,0.12),transparent 60%);pointer-events:none}
+.run-wolf{width:42px;height:42px;flex-shrink:0;filter:drop-shadow(0 0 10px rgba(200,0,0,0.7));animation:hb 3s ease-in-out infinite}
+@keyframes hb{0%,100%{filter:drop-shadow(0 0 8px rgba(200,0,0,0.5))}50%{filter:drop-shadow(0 0 22px rgba(255,0,0,0.85))}}
+.run-title{
+  font-size:1rem;font-weight:900;letter-spacing:.25em;text-transform:uppercase;
+  background:linear-gradient(to bottom,#ff5533 0%,#dd1100 25%,#880000 50%,#dd1100 75%,#ff5533 100%);
+  background-size:100% 200%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  animation:bloodRiver 2s linear infinite;
+}
+@keyframes bloodRiver{from{background-position:0 0%}to{background-position:0 100%}}
+.run-sub{font-size:.65rem;color:rgba(138,150,163,0.5);letter-spacing:.15em;margin-left:4px}
+.run-status{margin-left:auto;display:flex;align-items:center;gap:8px}
+.run-pill{font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;background:rgba(180,0,0,0.1);color:var(--red);border:1px solid rgba(180,0,0,0.28);border-radius:20px;padding:4px 12px;display:flex;align-items:center;gap:6px}
+.run-pill::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--red);animation:pulse 1.5s infinite}
+
+/* STATS */
+.vsl-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;position:relative;z-index:1;margin-bottom:20px}
+.vs-card{background:rgba(8,8,13,0.7);border:1px solid var(--border);border-radius:6px;padding:14px 18px;display:flex;align-items:center;gap:12px}
+.vs-icon{font-size:1.3rem;flex-shrink:0}
+.vs-info{display:flex;flex-direction:column;gap:2px}
+.vs-val{font-size:1.2rem;font-weight:700;color:#e8e8e8}
+.vs-label{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--silver)}
+
+/* OPS GRID */
+.ops-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;position:relative;z-index:1;margin-bottom:20px;align-items:start}
+
+/* BRANCH COLUMN */
+.branch-col{display:flex;flex-direction:column;gap:14px}
+.branch-header{
+  background:linear-gradient(135deg,rgba(15,5,5,0.98),rgba(22,5,5,0.95));
+  border:1px solid rgba(160,0,0,0.3);border-radius:8px;
+  padding:13px 18px;display:flex;align-items:center;gap:12px;
+  position:relative;overflow:hidden;
+}
+.branch-header::before{content:'';position:absolute;top:0;left:0;right:0;height:1.5px;background:linear-gradient(90deg,transparent,var(--bc,#cc1100),transparent)}
+.branch-header::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% -20%,rgba(var(--bcr,180,0,0),0.08),transparent 60%);pointer-events:none}
+.branch-icon{font-size:1.3rem;flex-shrink:0}
+.branch-title{font-size:.85rem;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:#e0e0e0}
+.branch-count{margin-left:auto;font-size:.63rem;color:var(--silver);background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:3px;padding:2px 8px}
+
+/* SUB SECTION */
+.sub-section{background:rgba(6,6,10,0.88);border:1px solid rgba(100,0,0,0.18);border-radius:8px;overflow:hidden}
+.sub-header{padding:9px 14px;border-bottom:1px solid rgba(100,0,0,0.14);display:flex;align-items:center;gap:9px;background:rgba(10,4,4,0.55)}
+.sub-dot{width:7px;height:7px;border-radius:50%;background:var(--dc,#cc1100);box-shadow:0 0 6px var(--dc,rgba(204,17,0,0.7));animation:pulse 1.6s infinite;flex-shrink:0}
+.sub-title{font-size:.65rem;letter-spacing:.22em;text-transform:uppercase;color:var(--silver);font-weight:600}
+.sub-add-btn{margin-left:auto;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--red);background:rgba(180,0,0,0.08);border:1px solid rgba(180,0,0,0.2);border-radius:3px;padding:3px 10px;cursor:pointer;transition:all .2s;font-family:inherit}
+.sub-add-btn:hover{background:rgba(180,0,0,0.2);border-color:rgba(180,0,0,0.45)}
+.sub-body{padding:10px;display:flex;flex-direction:column;gap:8px;min-height:72px}
+.empty-state{text-align:center;padding:22px 12px;font-size:.7rem;color:rgba(138,150,163,0.3);letter-spacing:.08em;font-style:italic}
+
+/* OFFER CARD */
+.offer-card{background:rgba(10,4,4,0.92);border:1px solid rgba(130,0,0,0.22);border-radius:6px;overflow:hidden;transition:border-color .2s;position:relative}
+.offer-card:hover{border-color:rgba(180,0,0,0.42)}
+.offer-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(204,17,0,0.7),transparent)}
+.oc-header{padding:9px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(100,0,0,0.14);cursor:pointer;user-select:none}
+.oc-name{font-size:.8rem;font-weight:700;color:#e0e0e0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.plat-badge{font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;padding:2px 6px;border-radius:3px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:var(--silver);white-space:nowrap;flex-shrink:0}
+.live-dot{font-size:.58rem;color:#00cc55;letter-spacing:.05em;display:flex;align-items:center;gap:3px;flex-shrink:0}
+.live-dot::before{content:'';width:5px;height:5px;border-radius:50%;background:#00cc55;display:inline-block;animation:pulse 1.2s infinite;flex-shrink:0}
+.oc-toggle{color:var(--silver);font-size:.7rem;transition:transform .2s;flex-shrink:0}
+.oc-toggle.open{transform:rotate(180deg)}
+.oc-remove{color:rgba(180,0,0,0.35);cursor:pointer;font-size:.95rem;padding:0 2px;transition:color .15s;flex-shrink:0;background:none;border:none;font-family:inherit}
+.oc-remove:hover{color:#cc1100}
+.oc-body{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.oc-body.collapsed{display:none}
+
+/* DATA GRID */
+.data-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:5px}
+.df-item{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.045);border-radius:4px;padding:6px 8px;display:flex;flex-direction:column;gap:1px}
+.df-label{font-size:.55rem;letter-spacing:.1em;text-transform:uppercase;color:var(--silver);opacity:.6}
+.df-value{font-size:.78rem;font-weight:700;color:#e0e0e0}
+.df-value.green{color:#22dd66}
+.df-value.orange{color:#ff8800}
+.df-value.red{color:#ee2200}
+
+/* AFFILIATES */
+.affiliates-block{border-top:1px solid rgba(100,0,0,0.12);padding-top:8px}
+.aff-title{font-size:.58rem;letter-spacing:.12em;text-transform:uppercase;color:var(--silver);margin-bottom:5px}
+.aff-row{display:flex;align-items:center;justify-content:space-between;padding:3px 7px;background:rgba(255,255,255,0.02);border-radius:3px;margin-bottom:2px;font-size:.72rem}
+.aff-rank{color:var(--silver);font-size:.6rem;width:18px}
+.aff-name{color:var(--text);flex:1}
+.aff-rev{color:#22dd66;font-weight:700}
+.refresh-btn{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--silver);background:transparent;border:1px solid var(--border);border-radius:3px;padding:4px 10px;cursor:pointer;transition:all .2s;align-self:flex-end;font-family:inherit}
+.refresh-btn:hover{border-color:rgba(180,0,0,0.3);color:var(--red)}
+
+/* PROJECT CARD */
+.project-card{background:rgba(10,4,4,0.92);border:1px solid rgba(100,0,0,0.2);border-radius:6px;overflow:hidden;position:relative}
+.project-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(100,0,80,0.7),transparent)}
+.pc-header{padding:9px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(100,0,0,0.14);cursor:pointer;user-select:none}
+.pc-name{font-size:.8rem;font-weight:700;color:#e0e0e0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-deadline{font-size:.6rem;color:var(--silver);flex-shrink:0}
+.pc-pct{font-size:.65rem;font-weight:700;color:var(--red);flex-shrink:0}
+.pc-toggle{color:var(--silver);font-size:.7rem;transition:transform .2s;flex-shrink:0}
+.pc-toggle.open{transform:rotate(180deg)}
+.pc-remove{color:rgba(180,0,0,0.35);cursor:pointer;font-size:.95rem;padding:0 2px;transition:color .15s;flex-shrink:0;background:none;border:none;font-family:inherit}
+.pc-remove:hover{color:#cc1100}
+.pc-body{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.pc-body.collapsed{display:none}
+.pc-progress-bar{height:3px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden}
+.pc-progress-fill{height:100%;background:linear-gradient(90deg,#6b0000,#cc1100);border-radius:2px;transition:width .5s ease}
+.pc-meta{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.pc-meta-row{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:3px;padding:5px 7px}
+.pc-meta-label{font-size:.55rem;letter-spacing:.1em;text-transform:uppercase;color:var(--silver);opacity:.6}
+.pc-meta-val{font-size:.75rem;font-weight:600;color:var(--text)}
+.status-badge{font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;padding:1px 6px;border-radius:2px;display:inline-block}
+.status-badge.done{background:rgba(0,180,80,0.12);color:#22dd66;border:1px solid rgba(0,180,80,0.25)}
+.status-badge.in-progress{background:rgba(255,170,0,0.1);color:#ffaa00;border:1px solid rgba(255,170,0,0.25)}
+.status-badge.not-started{background:rgba(180,0,0,0.1);color:#cc3300;border:1px solid rgba(180,0,0,0.2)}
+.checklist-title{font-size:.58rem;letter-spacing:.14em;text-transform:uppercase;color:var(--silver);margin-bottom:5px}
+.checklist{display:flex;flex-direction:column;gap:3px}
+.check-item{display:flex;align-items:center;gap:7px;font-size:.72rem;color:var(--silver);cursor:pointer;padding:3px 5px;border-radius:3px;transition:background .15s;user-select:none}
+.check-item:hover{background:rgba(255,255,255,0.03)}
+.check-box{width:13px;height:13px;border-radius:2px;border:1px solid rgba(180,0,0,0.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.6rem;transition:all .15s}
+.check-item.checked .check-box{background:rgba(180,0,0,0.22);border-color:rgba(204,17,0,0.55);color:var(--red)}
+.check-item.checked .check-label{color:rgba(200,200,210,0.4);text-decoration:line-through}
+
+/* NOTES */
+.notes-section{position:relative;z-index:1;background:rgba(6,6,10,0.88);border:1px solid rgba(100,0,0,0.18);border-radius:8px;overflow:hidden}
+.notes-header{padding:9px 14px;border-bottom:1px solid rgba(100,0,0,0.14);background:rgba(10,4,4,0.55);display:flex;align-items:center;gap:10px;font-size:.65rem;letter-spacing:.2em;text-transform:uppercase;color:var(--silver)}
+.wolf-textarea{width:100%;min-height:100px;background:transparent;border:none;outline:none;padding:13px 15px;font-family:inherit;font-size:.82rem;color:var(--text);line-height:1.75;resize:vertical}
+.wolf-textarea::placeholder{color:rgba(138,150,163,0.28);font-style:italic}
+.notes-footer{padding:7px 12px;border-top:1px solid rgba(100,0,0,0.1);display:flex;align-items:center;justify-content:flex-end;gap:12px;background:rgba(8,4,4,0.4)}
+.notes-saved{font-size:.62rem;color:rgba(0,200,80,0.7);display:none;align-items:center;gap:4px;letter-spacing:.08em}
+.notes-saved.show{display:flex}
+.notes-save-btn{font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--red);background:rgba(180,0,0,0.1);border:1px solid rgba(180,0,0,0.25);border-radius:3px;padding:5px 14px;cursor:pointer;transition:all .2s;font-family:inherit}
+.notes-save-btn:hover{background:rgba(180,0,0,0.22);border-color:rgba(180,0,0,0.5)}
+
+.den-footer{text-align:center;padding:4px 0 8px;font-size:.62rem;letter-spacing:.3em;text-transform:uppercase;color:rgba(138,150,163,0.2);position:relative;z-index:1}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.78);display:flex;align-items:center;justify-content:center;z-index:10000;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:rgba(9,8,12,0.99);border:1px solid rgba(140,0,0,0.35);border-radius:10px;padding:26px;width:460px;max-width:90vw;max-height:85vh;overflow-y:auto;position:relative}
+.modal::-webkit-scrollbar{width:3px}
+.modal::-webkit-scrollbar-thumb{background:rgba(180,0,0,0.3)}
+.modal::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,#cc1100,transparent)}
+.modal-title{font-size:.82rem;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:#e0e0e0;margin-bottom:18px;display:flex;align-items:center;gap:10px}
+.form-group{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.form-label{font-size:.6rem;letter-spacing:.12em;text-transform:uppercase;color:var(--silver)}
+.form-input,.form-select{background:rgba(255,255,255,0.03);border:1px solid rgba(180,0,0,0.2);border-radius:4px;padding:8px 11px;font-family:inherit;font-size:.8rem;color:var(--text);outline:none;transition:border-color .2s;width:100%}
+.form-input:focus,.form-select:focus{border-color:rgba(180,0,0,0.5)}
+.form-input::placeholder{color:rgba(138,150,163,0.3)}
+.form-select option{background:#0d0d14}
+.plat-chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.plat-chip{font-size:.6rem;letter-spacing:.08em;text-transform:uppercase;padding:5px 10px;border-radius:4px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:rgba(200,200,210,0.5);cursor:pointer;transition:all .15s}
+.plat-chip.selected{background:rgba(180,0,0,0.15);border-color:rgba(204,17,0,0.4);color:var(--red);font-weight:600}
+.modal-checklist{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:4px}
+.modal-check{display:flex;align-items:center;gap:6px;padding:6px 8px;background:rgba(255,255,255,0.02);border-radius:3px;border:1px solid rgba(255,255,255,0.04);cursor:pointer}
+.modal-check input{width:12px;height:12px;cursor:pointer;accent-color:var(--red)}
+.modal-check span{font-size:.72rem;color:var(--silver)}
+.modal-btns{display:flex;gap:10px;margin-top:18px}
+.btn-primary{flex:1;padding:10px;background:linear-gradient(135deg,rgba(180,0,0,0.28),rgba(100,0,0,0.28));border:1px solid rgba(180,0,0,0.4);border-radius:5px;color:#e0e0e0;font-family:inherit;font-size:.72rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:all .2s}
+.btn-primary:hover:not(:disabled){background:linear-gradient(135deg,rgba(200,0,0,0.4),rgba(140,0,0,0.4));border-color:rgba(220,0,0,0.6)}
+.btn-primary:disabled{opacity:.5;cursor:default}
+.btn-secondary{padding:10px 16px;background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--silver);font-family:inherit;font-size:.72rem;cursor:pointer;transition:all .2s}
+.btn-secondary:hover{border-color:rgba(180,0,0,0.25);color:var(--text)}
+.connect-status{font-size:.65rem;letter-spacing:.1em;padding:6px 10px;border-radius:3px;margin-top:8px;display:none}
+.connect-status.show{display:block}
+.connect-status.connecting{color:#ffaa00;background:rgba(255,170,0,0.08);border:1px solid rgba(255,170,0,0.2)}
+.connect-status.success{color:#22dd66;background:rgba(0,180,80,0.08);border:1px solid rgba(0,180,80,0.2)}
+
+/* CURSOR BLOOD */
+.cursor-blood{position:fixed;pointer-events:none;z-index:99999;border-radius:50% 50% 58% 58%;background:radial-gradient(ellipse at 40% 30%,#ff2200,#880000);box-shadow:0 0 6px rgba(200,0,0,0.5);transform-origin:center top}
+.cursor-trail{position:fixed;pointer-events:none;z-index:99998;border-radius:0 0 2px 2px;background:linear-gradient(to bottom,rgba(160,0,0,.7),rgba(100,0,0,.2),transparent);transform-origin:top center}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div class="shell">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="logo">
+    <svg viewBox="0 0 300 310" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="150" cy="148" rx="118" ry="108" fill="#440000" opacity="0.18"/>
+      <path d="M 150 44 C 125 44,95 58,78 86 C 62 112,58 144,64 170 C 70 194,84 212,100 220 C 106 223,112 225,120 224 L 128 218 L 150 215 L 172 218 L 180 224 C 188 225,194 223,200 220 C 216 212,230 194,236 170 C 242 144,238 112,222 86 C 205 58,175 44,150 44 Z" fill="#0d0d14"/>
+      <path d="M 85 82 C 78 64,65 28,75 14 C 80 7,90 7,96 16 C 104 27,106 62,107 80 Z" fill="#0c0c11"/>
+      <path d="M 215 82 C 222 64,235 28,225 14 C 220 7,210 7,204 16 C 196 27,194 62,193 80 Z" fill="#0c0c11"/>
+      <ellipse cx="113" cy="148" rx="23" ry="18" fill="#cc1500"/>
+      <ellipse cx="113" cy="148" rx="7" ry="16" fill="#040404"/>
+      <ellipse cx="187" cy="148" rx="23" ry="18" fill="#cc1500"/>
+      <ellipse cx="187" cy="148" rx="7" ry="16" fill="#040404"/>
+      <path d="M 135 178 C 135 168,165 168,165 178 C 165 191,155 196,150 196 C 145 196,135 191,135 178 Z" fill="#060608"/>
+      <path d="M 110 216 C 112 250,128 272,150 276 C 172 272,188 250,190 216 C 178 208,165 204,150 204 C 135 204,122 208,110 216 Z" fill="#1c0000"/>
+      <path d="M 116 211 L 111 237 L 123 211" fill="#eaeaea"/>
+      <path d="M 177 211 L 183 237 L 189 211" fill="#eaeaea"/>
+      <path d="M 126 244 C 124 265,138 280,150 282 C 162 280,176 265,174 244 C 167 234,150 230,133 234 Z" fill="#7a0000"/>
+    </svg>
+    <div class="logo-text">
+      <span class="logo-name">Awaken Wolves</span>
+      <span class="logo-tag">Pack CRM</span>
+    </div>
+  </div>
+  <nav class="nav">
+    <span class="nav-section">Operations</span>
+    <a href="dashboard.html" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Command Center
+    </a>
+    <a href="vsl.html" class="nav-item active">
+      <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+      VSL Operations
+    </a>
+    <a href="#" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      Media-Buying
+    </a>
+    <a href="#" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      IT &amp; Workforce
+    </a>
+    <span class="nav-section">Business</span>
+    <a href="#" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+      Products
+    </a>
+    <a href="#" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      P&amp;L Dashboard
+    </a>
+    <a href="#" class="nav-item">
+      <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93A10 10 0 104.93 19.07"/></svg>
+      Settings
+    </a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="avatar" id="sb-avatar">P</div>
+    <div class="user-info">
+      <span class="user-name" id="sb-name">Prabhat</span>
+      <span class="user-role">Alpha — Pack Leader</span>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="wolf-greeting">
+        <span class="page-title" id="top-title">Wolf Prabhat</span>
+        <span class="wolf-badge">🩸 Blood Mode: Active</span>
+      </div>
+      <span class="page-sub">VSL Operations — Running Operations Command Center</span>
+    </div>
+    <div class="topbar-right">
+      <input class="search" type="text" placeholder="Search operations…"/>
+      <div class="notif">🔔<span class="ndot"></span></div>
+      <div class="top-avatar" id="top-avatar">P</div>
+    </div>
+  </div>
+
+  <div class="vsl-content" id="vsl-content">
+
+    <!-- SVG VEIN OVERLAY -->
+    <svg id="vein-svg" class="vein-svg" style="position:absolute;top:0;left:0;pointer-events:none;z-index:0;overflow:visible"></svg>
+
+    <!-- RUNNING OPS BANNER -->
+    <div class="run-banner" id="node-root">
+      <svg class="run-wolf" viewBox="0 0 300 310" xmlns="http://www.w3.org/2000/svg" width="42" height="42">
+        <ellipse cx="150" cy="148" rx="118" ry="108" fill="#440000" opacity="0.18"/>
+        <path d="M 150 44 C 125 44,95 58,78 86 C 62 112,58 144,64 170 C 70 194,84 212,100 220 C 106 223,112 225,120 224 L 128 218 L 150 215 L 172 218 L 180 224 C 188 225,194 223,200 220 C 216 212,230 194,236 170 C 242 144,238 112,222 86 C 205 58,175 44,150 44 Z" fill="#0d0d14"/>
+        <path d="M 85 82 C 78 64,65 28,75 14 C 80 7,90 7,96 16 C 104 27,106 62,107 80 Z" fill="#2d0606"/>
+        <path d="M 215 82 C 222 64,235 28,225 14 C 220 7,210 7,204 16 C 196 27,194 62,193 80 Z" fill="#2d0606"/>
+        <ellipse cx="113" cy="148" rx="23" ry="18" fill="#cc1500"/>
+        <ellipse cx="113" cy="148" rx="7" ry="16" fill="#040404"/>
+        <ellipse cx="187" cy="148" rx="23" ry="18" fill="#cc1500"/>
+        <ellipse cx="187" cy="148" rx="7" ry="16" fill="#040404"/>
+        <path d="M 110 216 C 112 250,128 272,150 276 C 172 272,188 250,190 216 C 178 208,165 204,150 204 C 135 204,122 208,110 216 Z" fill="#1c0000"/>
+        <path d="M 116 211 L 111 237 L 123 211" fill="#eaeaea"/>
+        <path d="M 177 211 L 183 237 L 189 211" fill="#eaeaea"/>
+        <path d="M 126 244 C 124 265,138 280,150 282 C 162 280,176 265,174 244 C 167 234,150 230,133 234 Z" fill="#7a0000"/>
+      </svg>
+      <div>
+        <div class="run-title">Running Operations — VSL Division</div>
+        <div class="run-sub">All active & undergoing operations tracked below</div>
+      </div>
+      <div class="run-status">
+        <span class="run-pill">Systems Live</span>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="vsl-stats">
+      <div class="vs-card"><span class="vs-icon">🎬</span><div class="vs-info"><span class="vs-val" id="stat-live">0</span><span class="vs-label">Live Operations</span></div></div>
+      <div class="vs-card"><span class="vs-icon">💰</span><div class="vs-info"><span class="vs-val" id="stat-rev">$0</span><span class="vs-label">Revenue Today</span></div></div>
+      <div class="vs-card"><span class="vs-icon">⚙️</span><div class="vs-info"><span class="vs-val" id="stat-under">0</span><span class="vs-label">Undergoing Ops</span></div></div>
+      <div class="vs-card"><span class="vs-icon">🩸</span><div class="vs-info"><span class="vs-val" id="stat-complete">—</span><span class="vs-label">Avg Completion</span></div></div>
+    </div>
+
+    <!-- 2-COLUMN OPS GRID -->
+    <div class="ops-grid">
+
+      <!-- BIZOPS -->
+      <div class="branch-col" id="col-bizops">
+        <div class="branch-header" id="node-bizops" style="--bc:#cc1100">
+          <span class="branch-icon">🎬</span>
+          <span class="branch-title">Bizops</span>
+          <span class="branch-count" id="bc-bizops">0 ops</span>
+        </div>
+        <div class="sub-section" id="node-live-bizops">
+          <div class="sub-header">
+            <div class="sub-dot" style="--dc:#00cc55"></div>
+            <span class="sub-title">Live Bizops</span>
+            <button class="sub-add-btn" onclick="openAddOffer('bizops')">+ Add Offer</button>
+          </div>
+          <div class="sub-body" id="list-live-bizops">
+            <div class="empty-state">No live offers. Click + to connect one.</div>
+          </div>
+        </div>
+        <div class="sub-section" id="node-under-bizops">
+          <div class="sub-header">
+            <div class="sub-dot" style="--dc:#ff8800"></div>
+            <span class="sub-title">Undergoing Operations</span>
+            <button class="sub-add-btn" onclick="openAddProject('bizops')">+ New Op</button>
+          </div>
+          <div class="sub-body" id="list-under-bizops">
+            <div class="empty-state">No operations in progress.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- NUTRA -->
+      <div class="branch-col" id="col-nutra">
+        <div class="branch-header" id="node-nutra" style="--bc:#008844">
+          <span class="branch-icon">🌿</span>
+          <span class="branch-title">Nutra</span>
+          <span class="branch-count" id="bc-nutra">0 ops</span>
+        </div>
+        <div class="sub-section" id="node-live-nutra">
+          <div class="sub-header">
+            <div class="sub-dot" style="--dc:#00cc55"></div>
+            <span class="sub-title">Live Nutra</span>
+            <button class="sub-add-btn" onclick="openAddOffer('nutra')">+ Add Offer</button>
+          </div>
+          <div class="sub-body" id="list-live-nutra">
+            <div class="empty-state">No live offers. Click + to connect one.</div>
+          </div>
+        </div>
+        <div class="sub-section" id="node-under-nutra">
+          <div class="sub-header">
+            <div class="sub-dot" style="--dc:#ff8800"></div>
+            <span class="sub-title">Undergoing Operations</span>
+            <button class="sub-add-btn" onclick="openAddProject('nutra')">+ New Op</button>
+          </div>
+          <div class="sub-body" id="list-under-nutra">
+            <div class="empty-state">No operations in progress.</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /ops-grid -->
+
+    <!-- ADDITIONAL NOTES -->
+    <div class="notes-section">
+      <div class="notes-header">🐾 Additional Notes — Field Intelligence</div>
+      <textarea class="wolf-textarea" id="notes-ta" placeholder="Write your intel here… field observations, strategy notes, affiliate performance, anything the pack needs to know. This den keeps your secrets."></textarea>
+      <div class="notes-footer">
+        <span class="notes-saved" id="notes-saved">✓ Saved to den</span>
+        <button class="notes-save-btn" onclick="saveNotes()">Save Notes</button>
+      </div>
+    </div>
+
+    <div class="den-footer">▴ AWAKEN WOLVES — VSL OPERATIONS ▴</div>
+  </div><!-- /vsl-content -->
+</main>
+</div><!-- /shell -->
+
+<!-- MODAL: Add Live Offer -->
+<div class="modal-overlay" id="modal-offer">
+  <div class="modal">
+    <div class="modal-title">🩸 Connect Live Offer</div>
+    <div class="form-group">
+      <label class="form-label">Offer Name</label>
+      <input class="form-input" id="inp-offer-name" placeholder="e.g. Wolf Protocol 2.0"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Platform Integrations — select all that apply</label>
+      <div class="plat-chips" id="plat-chips">
+        <div class="plat-chip" data-plat="Explodely" onclick="togglePlat(this)">Explodely</div>
+        <div class="plat-chip" data-plat="JVzoo" onclick="togglePlat(this)">JVzoo</div>
+        <div class="plat-chip" data-plat="Clickbank" onclick="togglePlat(this)">Clickbank</div>
+        <div class="plat-chip" data-plat="Cartpanda" onclick="togglePlat(this)">Cartpanda</div>
+        <div class="plat-chip" data-plat="Digistore" onclick="togglePlat(this)">Digistore</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">API Key</label>
+      <input class="form-input" id="inp-api-key" type="password" placeholder="Paste your platform API key…"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">API Secret <span style="opacity:.4;text-transform:none;letter-spacing:0">(if required)</span></label>
+      <input class="form-input" id="inp-api-secret" type="password" placeholder="Optional…"/>
+    </div>
+    <div class="connect-status" id="connect-status"></div>
+    <div class="modal-btns">
+      <button class="btn-primary" id="connect-btn" onclick="connectOffer()">🩸 Connect &amp; Fetch Data</button>
+      <button class="btn-secondary" onclick="closeModal('modal-offer')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Add Undergoing Project -->
+<div class="modal-overlay" id="modal-project">
+  <div class="modal">
+    <div class="modal-title">⚙️ New Operation</div>
+    <div class="form-group">
+      <label class="form-label">Offer Name</label>
+      <input class="form-input" id="inp-proj-name" placeholder="e.g. Beast Mode Formula"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Project Manager</label>
+      <input class="form-input" id="inp-proj-pm" placeholder="Name…"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">VSL Creator</label>
+      <input class="form-input" id="inp-proj-vsl" placeholder="Name…"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Script Status</label>
+      <select class="form-select" id="inp-proj-script">
+        <option value="not-started">Not Started</option>
+        <option value="in-progress">In Progress</option>
+        <option value="done">Done</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Backend Checklist</label>
+      <div class="modal-checklist" id="backend-checks">
+        <label class="modal-check"><input type="checkbox" name="bc" value="Funnel"/><span>Funnel</span></label>
+        <label class="modal-check"><input type="checkbox" name="bc" value="Funnel Pages"/><span>Funnel Pages</span></label>
+        <label class="modal-check"><input type="checkbox" name="bc" value="Training Pages"/><span>Training Pages</span></label>
+        <label class="modal-check"><input type="checkbox" name="bc" value="Freebie Page"/><span>Freebie Page</span></label>
+        <label class="modal-check"><input type="checkbox" name="bc" value="High-Ticket Page"/><span>High-Ticket Page</span></label>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Operation Deadline</label>
+      <input class="form-input" id="inp-proj-deadline" type="date"/>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-primary" onclick="addProject()">⚙️ Add Operation</button>
+      <button class="btn-secondary" onclick="closeModal('modal-project')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── SESSION ── */
+const wu = sessionStorage.getItem('wolf_user') || 'Prabhat';
+document.getElementById('top-title').textContent = 'Wolf ' + wu;
+['top-avatar','sb-avatar'].forEach(id => document.getElementById(id).textContent = wu[0].toUpperCase());
+document.getElementById('sb-name').textContent = wu;
+
+/* ── CANVAS BACKGROUND ── */
+(function(){
+  const c = document.getElementById('bg'), ctx = c.getContext('2d');
+  let W,H,stars=[],embers=[];
+  function resize(){W=c.width=innerWidth;H=c.height=innerHeight;init()}
+  function init(){
+    stars=[];embers=[];
+    for(let i=0;i<180;i++) stars.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.1+.2,op:Math.random()*.6+.1,spd:Math.random()*.3+.04});
+    for(let i=0;i<25;i++) embers.push({x:Math.random()*W,y:Math.random()*H+H*.4,r:Math.random()*1.4+.4,op:Math.random()*.35,vy:-(Math.random()*.9+.3),vx:(Math.random()-.5)*.35});
+  }
+  function frame(){
+    ctx.clearRect(0,0,W,H);ctx.fillStyle='#040407';ctx.fillRect(0,0,W,H);
+    stars.forEach(s=>{
+      s.op+=s.spd*.01*(Math.random()>.5?1:-1);s.op=Math.max(.05,Math.min(.75,s.op));
+      ctx.beginPath();ctx.arc(s.x,s.y,s.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(220,210,230,${s.op})`;ctx.fill();
+    });
+    embers.forEach(e=>{
+      e.y+=e.vy;e.x+=e.vx;e.op-=.002;
+      if(e.op<=0||e.y<-10){e.y=H+10;e.x=Math.random()*W;e.op=Math.random()*.3;}
+      ctx.beginPath();ctx.arc(e.x,e.y,e.r,0,Math.PI*2);
+      ctx.fillStyle=`rgba(220,50,0,${e.op})`;ctx.fill();
+    });
+    requestAnimationFrame(frame);
+  }
+  window.addEventListener('resize',resize);resize();frame();
+})();
+
+/* ── VEIN DRAWING ── */
+document.head.insertAdjacentHTML('beforeend','<style>@keyframes flowVein{from{stroke-dashoffset:600}to{stroke-dashoffset:0}}</style>');
+
+function getRC(el){
+  const r=el.getBoundingClientRect(), cr=document.getElementById('vsl-content').getBoundingClientRect();
+  const st=document.getElementById('vsl-content').scrollTop;
+  return {cx:r.left+r.width/2-cr.left, cy:r.top+r.height/2-cr.top+st, top:r.top-cr.top+st, bot:r.bottom-cr.top+st, left:r.left-cr.left, right:r.right-cr.left, w:r.width, h:r.height};
+}
+
+function drawVeins(){
+  const svg=document.getElementById('vein-svg');
+  const content=document.getElementById('vsl-content');
+  svg.setAttribute('width', content.offsetWidth);
+  svg.setAttribute('height', Math.max(content.scrollHeight, content.offsetHeight));
+
+  svg.innerHTML=`<defs>
+    <filter id="vg" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="2.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="vg2" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>`;
+
+  const pairs = [
+    ['node-root','node-bizops'],
+    ['node-root','node-nutra'],
+    ['node-bizops','node-live-bizops'],
+    ['node-bizops','node-under-bizops'],
+    ['node-nutra','node-live-nutra'],
+    ['node-nutra','node-under-nutra'],
+  ];
+
+  const colors = {
+    'node-root,node-bizops':'#cc1100',
+    'node-root,node-nutra':'#008844',
+    'node-bizops,node-live-bizops':'#880000',
+    'node-bizops,node-under-bizops':'#882200',
+    'node-nutra,node-live-nutra':'#006633',
+    'node-nutra,node-under-nutra':'#005522',
+  };
+
+  pairs.forEach(([aId,bId])=>{
+    const a=document.getElementById(aId), b=document.getElementById(bId);
+    if(!a||!b) return;
+    const ar=getRC(a), br=getRC(b);
+    const col=colors[aId+','+bId]||'#8b0000';
+
+    const x1=ar.cx, y1=ar.bot-4;
+    const x2=br.cx, y2=br.top+4;
+    const mid=(y1+y2)/2;
+    const d=`M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`;
+    const len=Math.hypot(x2-x1,y2-y1)*1.5;
+
+    // Dark base vein
+    const base=document.createElementNS('http://www.w3.org/2000/svg','path');
+    base.setAttribute('d',d);base.setAttribute('stroke','#200000');
+    base.setAttribute('stroke-width','3');base.setAttribute('fill','none');base.setAttribute('opacity','0.8');
+    svg.appendChild(base);
+
+    // Mid glow vein
+    const mid1=document.createElementNS('http://www.w3.org/2000/svg','path');
+    mid1.setAttribute('d',d);mid1.setAttribute('stroke',col);
+    mid1.setAttribute('stroke-width','1.5');mid1.setAttribute('fill','none');
+    mid1.setAttribute('filter','url(#vg)');mid1.setAttribute('opacity','0.55');
+    svg.appendChild(mid1);
+
+    // Flowing blood dashes
+    const flow=document.createElementNS('http://www.w3.org/2000/svg','path');
+    flow.setAttribute('d',d);flow.setAttribute('stroke',col);
+    flow.setAttribute('stroke-width','2');flow.setAttribute('fill','none');
+    flow.setAttribute('stroke-dasharray',`${len*0.18} ${len*0.82}`);
+    flow.setAttribute('filter','url(#vg)');
+    flow.style.animation=`flowVein ${1.8+Math.random()*1.2}s linear infinite`;
+    svg.appendChild(flow);
+
+    // Bright pulsing glow on top
+    const glow=document.createElementNS('http://www.w3.org/2000/svg','path');
+    glow.setAttribute('d',d);glow.setAttribute('stroke',col);
+    glow.setAttribute('stroke-width','4');glow.setAttribute('fill','none');
+    glow.setAttribute('filter','url(#vg2)');
+    glow.setAttribute('opacity','0.18');
+    glow.style.animation=`flowVein ${2+Math.random()}s linear infinite reverse`;
+    svg.appendChild(glow);
+
+    // Node dots at endpoints
+    [[x1,y1],[x2,y2]].forEach(([nx,ny])=>{
+      const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');
+      dot.setAttribute('cx',nx);dot.setAttribute('cy',ny);dot.setAttribute('r','4');
+      dot.setAttribute('fill',col);dot.setAttribute('filter','url(#vg)');dot.setAttribute('opacity','0.8');
+      svg.appendChild(dot);
+    });
+  });
+}
+
+let veinTimer;
+function scheduleVeins(){clearTimeout(veinTimer);veinTimer=setTimeout(drawVeins,80)}
+window.addEventListener('resize',scheduleVeins);
+document.getElementById('vsl-content').addEventListener('scroll',scheduleVeins);
+window.addEventListener('load',()=>setTimeout(drawVeins,120));
+setTimeout(drawVeins,200);
+
+/* ── MODAL STATE ── */
+let modalCol='bizops', selectedPlats=new Set();
+
+function openAddOffer(col){
+  modalCol=col;selectedPlats=new Set();
+  document.querySelectorAll('.plat-chip').forEach(c=>c.classList.remove('selected'));
+  ['inp-offer-name','inp-api-key','inp-api-secret'].forEach(id=>document.getElementById(id).value='');
+  const cs=document.getElementById('connect-status');
+  cs.className='connect-status';cs.textContent='';
+  const btn=document.getElementById('connect-btn');
+  btn.disabled=false;btn.textContent='🩸 Connect & Fetch Data';
+  document.getElementById('modal-offer').classList.add('open');
+}
+function openAddProject(col){
+  modalCol=col;
+  ['inp-proj-name','inp-proj-pm','inp-proj-vsl'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('inp-proj-script').value='not-started';
+  document.getElementById('inp-proj-deadline').value='';
+  document.querySelectorAll('#backend-checks input').forEach(c=>c.checked=false);
+  document.getElementById('modal-project').classList.add('open');
+}
+function closeModal(id){document.getElementById(id).classList.remove('open')}
+document.querySelectorAll('.modal-overlay').forEach(ov=>ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('open')}));
+function togglePlat(el){el.classList.toggle('selected')?selectedPlats.add(el.dataset.plat):selectedPlats.delete(el.dataset.plat)}
+
+/* ── MOCK DATA ── */
+const PLAT_COLOR={'Explodely':'#ff5500','JVzoo':'#0077cc','Clickbank':'#00aa44','Cartpanda':'#9900cc','Digistore':'#cc7700'};
+function fmt(n){return '$'+Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,',')}
+function rnd(a,b){return Math.random()*(b-a)+a}
+function mockData(name,plats){
+  const base=rnd(40000,280000);
+  return {
+    platformHosted:plats.join(', ')||'Direct',
+    revenueAllTime:fmt(base),
+    revenueToday:fmt(rnd(400,9000)),
+    revenueYesterday:fmt(rnd(700,14000)),
+    revenue7Days:fmt(rnd(4000,65000)),
+    refundRate:rnd(1.1,6.5).toFixed(1)+'%',
+    chargebackRate:rnd(0.04,0.42).toFixed(2)+'%',
+    topAffiliates:[
+      {rank:1,name:'WolfElite_'+Math.floor(rnd(10,99)),rev:fmt(rnd(5000,42000))},
+      {rank:2,name:'DarkHunter_'+Math.floor(rnd(10,99)),rev:fmt(rnd(2000,18000))},
+      {rank:3,name:'BloodPack_'+Math.floor(rnd(10,99)),rev:fmt(rnd(400,9000))},
+    ]
+  };
+}
+
+/* ── CONNECT OFFER ── */
+function connectOffer(){
+  const name=document.getElementById('inp-offer-name').value.trim();
+  if(!name){document.getElementById('inp-offer-name').style.borderColor='rgba(220,0,0,.7)';setTimeout(()=>document.getElementById('inp-offer-name').style.borderColor='',1200);return;}
+  const plats=selectedPlats.size>0?[...selectedPlats]:['Direct'];
+  const btn=document.getElementById('connect-btn');
+  const cs=document.getElementById('connect-status');
+  btn.disabled=true;btn.textContent='⏳ Connecting…';
+  cs.className='connect-status connecting show';cs.textContent='● Establishing secure feed with '+plats.join(', ')+'…';
+  setTimeout(()=>{cs.textContent='● Syncing revenue streams & affiliate data…'},800);
+  setTimeout(()=>{
+    cs.className='connect-status success show';cs.textContent='✓ Data synced — injecting into operations board';
+    setTimeout(()=>{
+      createOfferCard(name,plats,mockData(name,plats),modalCol);
+      closeModal('modal-offer');updateStats();scheduleVeins();
+    },500);
+  },2000);
+}
+
+function createOfferCard(name,plats,data,col){
+  const list=document.getElementById('list-live-'+col);
+  const emp=list.querySelector('.empty-state');if(emp)emp.remove();
+  const card=document.createElement('div');card.className='offer-card';
+  const refN=parseFloat(data.refundRate),cbN=parseFloat(data.chargebackRate);
+  const rCls=refN>4?'red':refN>2.5?'orange':'green';
+  const cCls=cbN>0.3?'red':cbN>0.15?'orange':'green';
+  const platBadges=plats.map(p=>`<span class="plat-badge" style="color:${PLAT_COLOR[p]||'#8a96a3'}">${p}</span>`).join('');
+  const affRows=data.topAffiliates.map(a=>`<div class="aff-row"><span class="aff-rank">#${a.rank}</span><span class="aff-name">${a.name}</span><span class="aff-rev">${a.rev}</span></div>`).join('');
+  const ps=JSON.stringify(plats).replace(/"/g,'&quot;');
+  card.innerHTML=`
+    <div class="oc-header" onclick="toggleCard(this,'oc-body')">
+      <span class="oc-name">💰 ${name}</span>${platBadges}
+      <span class="live-dot">LIVE</span>
+      <span class="oc-toggle open">▲</span>
+      <button class="oc-remove" onclick="removeCard(event,this)">✕</button>
+    </div>
+    <div class="oc-body">
+      <div class="data-grid">
+        <div class="df-item"><span class="df-label">Platform Hosted</span><span class="df-value">${data.platformHosted}</span></div>
+        <div class="df-item"><span class="df-label">Revenue All-Time</span><span class="df-value green">${data.revenueAllTime}</span></div>
+        <div class="df-item"><span class="df-label">Revenue Today</span><span class="df-value green" data-today="1">${data.revenueToday}</span></div>
+        <div class="df-item"><span class="df-label">Revenue Yesterday</span><span class="df-value green">${data.revenueYesterday}</span></div>
+        <div class="df-item"><span class="df-label">Last 7 Days</span><span class="df-value green">${data.revenue7Days}</span></div>
+        <div class="df-item"><span class="df-label">Refund Rate</span><span class="df-value ${rCls}">${data.refundRate}</span></div>
+        <div class="df-item" style="grid-column:1/-1"><span class="df-label">Chargeback Rate</span><span class="df-value ${cCls}">${data.chargebackRate}</span></div>
+      </div>
+      <div class="affiliates-block">
+        <div class="aff-title">Top Affiliates &amp; Revenue</div>${affRows}
+      </div>
+      <button class="refresh-btn" onclick="refreshOffer(this,'${name}',${ps})">🔄 Refresh Data</button>
+    </div>`;
+  list.appendChild(card);
+}
+
+function toggleCard(header,bodyClass){
+  const body=header.nextElementSibling;
+  const tog=header.querySelector('.oc-toggle,.pc-toggle');
+  const c=body.classList.toggle('collapsed');
+  if(tog)tog.classList.toggle('open',!c);
+}
+function removeCard(e,btn){
+  e.stopPropagation();
+  const card=btn.closest('.offer-card,.project-card');
+  const list=card.parentElement;
+  card.style.cssText+='opacity:0;transform:scale(.95);transition:all .22s';
+  setTimeout(()=>{card.remove();if(!list.querySelector('.offer-card,.project-card'))list.innerHTML='<div class="empty-state">Empty. Click + to add.</div>';updateStats();scheduleVeins();},230);
+}
+
+function refreshOffer(btn,name,plats){
+  const body=btn.closest('.oc-body');
+  const orig=body.innerHTML;
+  body.innerHTML='<div style="text-align:center;padding:22px;color:var(--red);font-size:.72rem;letter-spacing:.1em;animation:pulse 1s infinite">⏳ Refreshing data streams…</div>';
+  setTimeout(()=>{
+    const d=mockData(name,plats);
+    const refN=parseFloat(d.refundRate),cbN=parseFloat(d.chargebackRate);
+    const rCls=refN>4?'red':refN>2.5?'orange':'green';
+    const cCls=cbN>0.3?'red':cbN>0.15?'orange':'green';
+    const affRows=d.topAffiliates.map(a=>`<div class="aff-row"><span class="aff-rank">#${a.rank}</span><span class="aff-name">${a.name}</span><span class="aff-rev">${a.rev}</span></div>`).join('');
+    const ps=JSON.stringify(plats).replace(/"/g,'&quot;');
+    body.innerHTML=`
+      <div class="data-grid">
+        <div class="df-item"><span class="df-label">Platform Hosted</span><span class="df-value">${d.platformHosted}</span></div>
+        <div class="df-item"><span class="df-label">Revenue All-Time</span><span class="df-value green">${d.revenueAllTime}</span></div>
+        <div class="df-item"><span class="df-label">Revenue Today</span><span class="df-value green" data-today="1">${d.revenueToday}</span></div>
+        <div class="df-item"><span class="df-label">Revenue Yesterday</span><span class="df-value green">${d.revenueYesterday}</span></div>
+        <div class="df-item"><span class="df-label">Last 7 Days</span><span class="df-value green">${d.revenue7Days}</span></div>
+        <div class="df-item"><span class="df-label">Refund Rate</span><span class="df-value ${rCls}">${d.refundRate}</span></div>
+        <div class="df-item" style="grid-column:1/-1"><span class="df-label">Chargeback Rate</span><span class="df-value ${cCls}">${d.chargebackRate}</span></div>
+      </div>
+      <div class="affiliates-block"><div class="aff-title">Top Affiliates &amp; Revenue</div>${affRows}</div>
+      <button class="refresh-btn" onclick="refreshOffer(this,'${name}',${ps})">🔄 Refresh Data</button>`;
+    updateStats();
+  },1400);
+}
+
+/* ── ADD PROJECT ── */
+const ALL_BACKEND=['Funnel','Funnel Pages','Training Pages','Freebie Page','High-Ticket Page'];
+function addProject(){
+  const name=document.getElementById('inp-proj-name').value.trim();
+  if(!name){document.getElementById('inp-proj-name').style.borderColor='rgba(220,0,0,.7)';setTimeout(()=>document.getElementById('inp-proj-name').style.borderColor='',1200);return;}
+  const pm=document.getElementById('inp-proj-pm').value.trim()||'—';
+  const vsl=document.getElementById('inp-proj-vsl').value.trim()||'—';
+  const script=document.getElementById('inp-proj-script').value;
+  const dl=document.getElementById('inp-proj-deadline').value;
+  const checks=[...document.querySelectorAll('#backend-checks input:checked')].map(c=>c.value);
+  const pct=Math.round(checks.length/ALL_BACKEND.length*100);
+  const scriptLbl=script==='done'?'Done':script==='in-progress'?'In Progress':'Not Started';
+  const dlLbl=dl?new Date(dl+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
+  const backHTML=ALL_BACKEND.map(it=>`
+    <div class="check-item${checks.includes(it)?' checked':''}" onclick="toggleCheck(this)">
+      <div class="check-box">${checks.includes(it)?'✓':''}</div>
+      <span class="check-label">${it}</span>
+    </div>`).join('');
+  const list=document.getElementById('list-under-'+modalCol);
+  const emp=list.querySelector('.empty-state');if(emp)emp.remove();
+  const card=document.createElement('div');card.className='project-card';
+  card.innerHTML=`
+    <div class="pc-header" onclick="toggleCard(this,'pc-body')">
+      <span class="pc-name">⚙️ ${name}</span>
+      <span class="pc-deadline">${dlLbl}</span>
+      <span class="pc-pct">${pct}%</span>
+      <span class="pc-toggle open">▲</span>
+      <button class="pc-remove" onclick="removeCard(event,this)">✕</button>
+    </div>
+    <div class="pc-body">
+      <div class="pc-progress-bar"><div class="pc-progress-fill" style="width:${pct}%"></div></div>
+      <div class="pc-meta">
+        <div class="pc-meta-row"><div class="pc-meta-label">Project Manager</div><div class="pc-meta-val">${pm}</div></div>
+        <div class="pc-meta-row"><div class="pc-meta-label">VSL Creator</div><div class="pc-meta-val">${vsl}</div></div>
+        <div class="pc-meta-row" style="grid-column:1/-1"><div class="pc-meta-label">Script</div><div><span class="status-badge ${script}">${scriptLbl}</span></div></div>
+      </div>
+      <div class="checklist-title">Backend Checklist</div>
+      <div class="checklist">${backHTML}</div>
+    </div>`;
+  list.appendChild(card);
+  closeModal('modal-project');updateStats();scheduleVeins();
+}
+
+function toggleCheck(item){
+  item.classList.toggle('checked');
+  item.querySelector('.check-box').textContent=item.classList.contains('checked')?'✓':'';
+  const card=item.closest('.project-card');
+  const all=card.querySelectorAll('.check-item').length;
+  const done=card.querySelectorAll('.check-item.checked').length;
+  const pct=Math.round(done/all*100);
+  card.querySelector('.pc-pct').textContent=pct+'%';
+  card.querySelector('.pc-progress-fill').style.width=pct+'%';
+  updateStats();
+}
+
+/* ── STATS ── */
+function updateStats(){
+  const liveCards=document.querySelectorAll('.offer-card');
+  const underCards=document.querySelectorAll('.project-card');
+  document.getElementById('stat-live').textContent=liveCards.length;
+  document.getElementById('stat-under').textContent=underCards.length;
+  let totalRev=0;
+  document.querySelectorAll('[data-today="1"]').forEach(el=>{totalRev+=parseFloat(el.textContent.replace(/[$,]/g,''))||0});
+  document.getElementById('stat-rev').textContent=totalRev>0?fmt(totalRev):'$0';
+  const fills=[...document.querySelectorAll('.pc-progress-fill')];
+  if(fills.length){const avg=Math.round(fills.reduce((s,f)=>s+parseFloat(f.style.width||0),0)/fills.length);document.getElementById('stat-complete').textContent=avg+'%';}
+  else{document.getElementById('stat-complete').textContent='—';}
+  const biz=document.querySelectorAll('#list-live-bizops .offer-card').length+document.querySelectorAll('#list-under-bizops .project-card').length;
+  const nut=document.querySelectorAll('#list-live-nutra .offer-card').length+document.querySelectorAll('#list-under-nutra .project-card').length;
+  document.getElementById('bc-bizops').textContent=biz+' ops';
+  document.getElementById('bc-nutra').textContent=nut+' ops';
+}
+
+/* ── NOTES ── */
+const ta=document.getElementById('notes-ta');
+const savedN=localStorage.getItem('vsl_notes');if(savedN)ta.value=savedN;
+function saveNotes(){
+  localStorage.setItem('vsl_notes',ta.value);
+  const el=document.getElementById('notes-saved');
+  el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2200);
+}
+ta.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();saveNotes();}});
+
+/* ── CURSOR BLOOD ── */
+let cursorN=0;
+document.addEventListener('mousemove',e=>{
+  if(++cursorN%3!==0||Math.random()>.55)return;
+  const drop=document.createElement('div');drop.className='cursor-blood';
+  const trail=document.createElement('div');trail.className='cursor-trail';
+  const sz=5+Math.random()*5;
+  drop.style.cssText=`width:${sz}px;height:${sz*1.3}px;left:${e.clientX-sz/2}px;top:${e.clientY}px`;
+  const tw=sz*.4;trail.style.cssText=`width:${tw}px;left:${e.clientX-tw/2}px;top:${e.clientY-sz}px;height:0px`;
+  document.body.appendChild(trail);document.body.appendChild(drop);
+  let velY=1.8+Math.random()*2,y=e.clientY,op=0.85;
+  function fall(){
+    if(op<=0){drop.remove();trail.remove();return;}
+    velY+=0.42;y+=velY;op-=velY>8?.04:.018;
+    const st=Math.min(2.6,1+velY*.11);
+    drop.style.top=y+'px';drop.style.opacity=op;drop.style.transform='scaleY('+st+')';
+    trail.style.height=Math.min(y-e.clientY,40)+'px';trail.style.opacity=op*.6;
+    requestAnimationFrame(fall);
+  }
+  requestAnimationFrame(fall);
+});
+</script>
+</body>
+</html>
