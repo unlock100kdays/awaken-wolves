@@ -421,7 +421,7 @@ async function jvzoo(username, apiKey, action) {
         if (!Array.isArray(tx) || tx.length === 0) break;
 
         for (const t of tx) {
-          const key = String(t.id ?? t.transaction_id ?? `${t.created_at}|${t.amount}`);
+          const key = String(t.transaction_id ?? t.id ?? `${t.sale_date}|${t.amount}|${t.customer_email}`);
           if (!seen.has(key)) { seen.add(key); all.push(t); }
         }
 
@@ -454,56 +454,39 @@ async function jvzoo(username, apiKey, action) {
     const affMap   = {};
     const recentTx = [];
 
-    /* Collect all unique top-level + nested keys from first tx for field discovery */
-    const firstTx = all[0] || {};
-    const flatSample = {};
-    function flattenObj(obj, prefix = '') {
-      for (const [k, v] of Object.entries(obj || {})) {
-        const key = prefix ? `${prefix}.${k}` : k;
-        if (v && typeof v === 'object' && !Array.isArray(v)) flattenObj(v, key);
-        else flatSample[key] = v;
-      }
-    }
-    flattenObj(firstTx);
-
     for (const tx of all) {
-      /* Amount — gross_amount / seller_amount / amount / price */
-      const amt = parseFloat(
-        tx.gross_amount ?? tx.seller_amount ?? tx.amount ?? tx.price ?? tx.total ?? tx.sale_price ?? tx.gross ?? 0
-      ) || 0;
-      /* JVZoo fee (their cut) */
+      /* Amount */
+      const amt = parseFloat(tx.amount ?? tx.gross_amount ?? tx.seller_amount ?? tx.price ?? tx.total ?? 0) || 0;
       const jvzFee = parseFloat(tx.jvzoo_fee ?? tx.fee ?? tx.platform_fee ?? 0) || 0;
 
-      /* Type — SALE, REFUND, CGBK, CANCEL-REBILL */
-      const typeRaw = String(tx.type ?? tx.transaction_type ?? tx.txn_type ?? tx.status ?? 'SALE').toUpperCase();
-      const isRef  = typeRaw.includes('REFUND');
-      const isCB   = typeRaw.includes('CGBK') || typeRaw.includes('CHARGEBACK');
-      const isSale = !isRef && !isCB;
-      const isRebill = typeRaw.includes('REBILL') || tx.is_rebill === true || Number(tx.rebill_number) > 0;
+      /* Type — JVZoo v3.0 uses transaction_type or type; defaults SALE */
+      const typeRaw = String(tx.transaction_type ?? tx.type ?? tx.sale_type ?? tx.txn_type ?? 'SALE').toUpperCase();
+      const isRef    = typeRaw.includes('REFUND');
+      const isCB     = typeRaw.includes('CGBK') || typeRaw.includes('CHARGEBACK') || typeRaw.includes('DISPUTE');
+      const isSale   = !isRef && !isCB;
+      const isRebill = typeRaw.includes('REBILL') || tx.is_rebill === true || Number(tx.rebill_number ?? 0) > 0;
 
-      /* Timestamp */
+      /* Timestamp — JVZoo uses sale_date (YYYY-MM-DD or ISO string) */
       let ts = 0;
-      if (tx.timestamp) ts = parseInt(tx.timestamp) || 0;
-      if (!ts) {
-        const rawDate = tx.created_at ?? tx.date ?? tx.purchase_date ?? tx.transaction_date ?? tx.time ?? '';
-        if (rawDate) { const d = new Date(rawDate); if (!isNaN(d)) ts = Math.floor(d.getTime() / 1000); }
+      const rawDate = tx.sale_date ?? tx.created_at ?? tx.date ?? tx.purchase_date ?? tx.transaction_date ?? '';
+      if (rawDate) {
+        const d = new Date(String(rawDate).includes('T') ? rawDate : rawDate + 'T00:00:00Z');
+        if (!isNaN(d)) ts = Math.floor(d.getTime() / 1000);
       }
 
-      /* Customer — flat or nested object */
-      const custObj = tx.customer || {};
-      const email   = (tx.customer_email ?? custObj.email ?? tx.email ?? tx.buyer_email ?? '').toLowerCase();
-      const custName = tx.customer_name ?? custObj.name ?? tx.name ?? '';
-      const country = tx.country ?? custObj.country ?? tx.customer_country ?? tx.buyer_country ?? '';
+      /* Customer — JVZoo v3.0 flat fields */
+      const email    = (tx.customer_email ?? tx.email ?? '').toLowerCase();
+      const custName = [tx.customer_first_name, tx.customer_last_name].filter(Boolean).join(' ')
+                    || tx.customer_name ?? '';
+      const country  = tx.customer_country ?? tx.country ?? '';
 
-      /* Product — flat or nested */
-      const prodObj = tx.product || {};
-      const pid   = String(tx.product_id ?? prodObj.id ?? tx.productId ?? '_unk');
-      const pname = tx.product_name ?? prodObj.name ?? tx.productName ?? tx.title ?? pid;
+      /* Product */
+      const pid   = String(tx.product_id ?? '_unk');
+      const pname = tx.product_name ?? tx.title ?? pid;
 
-      /* Affiliate — flat or nested */
-      const affObj  = tx.affiliate || {};
-      const affId   = String(tx.affiliate_id ?? affObj.id ?? tx.affiliateId ?? affObj.username ?? '');
-      const affName = tx.affiliate_name ?? affObj.name ?? affObj.username ?? tx.affiliateName ?? '';
+      /* Affiliate */
+      const affId   = String(tx.affiliate_id ?? '');
+      const affName = tx.affiliate_display_name ?? tx.affiliate_name ?? '';
 
       if (email) emails.add(email);
 
@@ -599,8 +582,6 @@ async function jvzoo(username, apiKey, action) {
         top_products:       prods,
         affiliates:         affs,
         recent_transactions: recentTx,
-        _api_fields:        flatSample,   /* raw field structure from first transaction */
-        _jvzoo_meta:        firstMeta,    /* raw pagination meta from JVZoo */
       },
       _counts: { total: all.length, chunks: chunks.length },
     };

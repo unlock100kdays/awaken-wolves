@@ -1179,22 +1179,6 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
     <div class="oc-body">
       ${staleErr?`<div class="data-src-live" style="color:#cc6600;border-color:#cc6600">⚠ Showing cached data — refresh failed: ${escHtml(staleErr)}</div>`:`<div class="data-src-live">↳ live data from ${escHtml(platform)} API</div>`}
       <div class="data-grid">${statTiles}</div>
-      ${(()=>{
-        /* Dynamic raw API fields — show any field the API returned that isn't in STAT_SPEC */
-        const apiFields = raw._api_fields;
-        if(!apiFields||typeof apiFields!=='object') return '';
-        const specKeys = new Set(STAT_SPEC.map(s=>s.k));
-        const skip = new Set(['id','type','status','currency','is_rebill','rebill_number','created_at','date','updated_at']);
-        const entries = Object.entries(apiFields).filter(([k])=>!specKeys.has(k)&&!skip.has(k)&&!k.startsWith('_'));
-        if(!entries.length) return '';
-        const tiles = entries.map(([k,v])=>{
-          const label = k.replace(/[._]/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-          const num = parseFloat(v);
-          const display = (!isNaN(num)&&v!==''&&v!==null) ? (k.includes('amount')||k.includes('price')||k.includes('fee')||k.includes('revenue')||k.includes('value')?fmt(num):num.toLocaleString()) : escHtml(String(v??'—'));
-          return`<div class="df-item"><span class="df-label">${escHtml(label)}</span><span class="df-value">${display}</span></div>`;
-        }).join('');
-        return`<div class="ex-block"><div class="ex-title">All API Fields (from first transaction)</div><div class="data-grid" style="margin-top:6px">${tiles}</div></div>`;
-      })()}
       ${prodsHTML}${countriesHTML}${affHTML}${txnHTML}
       <button class="refresh-btn" onclick="refreshOffer('${cid}')">🔄 Refresh Data</button>
     </div>`;
