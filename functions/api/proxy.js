@@ -419,8 +419,8 @@ async function jvzoo(username, apiKey, action) {
     const mid7       = todayMid - 6 * 86400;
     const mid30      = todayMid - 29 * 86400;
 
-    let gross = 0, refundAmt = 0, cbAmt = 0;
-    let orders = 0, refunds = 0, cbs = 0;
+    let gross = 0, refundAmt = 0, cbAmt = 0, totalFees = 0;
+    let orders = 0, refunds = 0, cbs = 0, rebills = 0;
     let todayRev = 0, ydayRev = 0, rev7 = 0, rev30 = 0;
     let lastSaleTs = 0;
     const emails   = new Set();
@@ -428,34 +428,56 @@ async function jvzoo(username, apiKey, action) {
     const affMap   = {};
     const recentTx = [];
 
+    /* Collect all unique top-level + nested keys from first tx for field discovery */
+    const firstTx = all[0] || {};
+    const flatSample = {};
+    function flattenObj(obj, prefix = '') {
+      for (const [k, v] of Object.entries(obj || {})) {
+        const key = prefix ? `${prefix}.${k}` : k;
+        if (v && typeof v === 'object' && !Array.isArray(v)) flattenObj(v, key);
+        else flatSample[key] = v;
+      }
+    }
+    flattenObj(firstTx);
+
     for (const tx of all) {
-      /* Amount — try multiple field names */
+      /* Amount — gross_amount / seller_amount / amount / price */
       const amt = parseFloat(
-        tx.amount ?? tx.price ?? tx.total ?? tx.sale_price ?? tx.gross ?? 0
+        tx.gross_amount ?? tx.seller_amount ?? tx.amount ?? tx.price ?? tx.total ?? tx.sale_price ?? tx.gross ?? 0
       ) || 0;
+      /* JVZoo fee (their cut) */
+      const jvzFee = parseFloat(tx.jvzoo_fee ?? tx.fee ?? tx.platform_fee ?? 0) || 0;
 
       /* Type — SALE, REFUND, CGBK, CANCEL-REBILL */
-      const typeRaw = String(tx.type ?? tx.transaction_type ?? tx.txn_type ?? 'SALE').toUpperCase();
+      const typeRaw = String(tx.type ?? tx.transaction_type ?? tx.txn_type ?? tx.status ?? 'SALE').toUpperCase();
       const isRef  = typeRaw.includes('REFUND');
       const isCB   = typeRaw.includes('CGBK') || typeRaw.includes('CHARGEBACK');
       const isSale = !isRef && !isCB;
-      const isRebill = typeRaw.includes('REBILL');
+      const isRebill = typeRaw.includes('REBILL') || tx.is_rebill === true || Number(tx.rebill_number) > 0;
 
       /* Timestamp */
       let ts = 0;
       if (tx.timestamp) ts = parseInt(tx.timestamp) || 0;
       if (!ts) {
-        const raw = tx.created_at ?? tx.date ?? tx.purchase_date ?? tx.transaction_date ?? tx.time ?? '';
-        if (raw) { const d = new Date(raw); if (!isNaN(d)) ts = Math.floor(d.getTime() / 1000); }
+        const rawDate = tx.created_at ?? tx.date ?? tx.purchase_date ?? tx.transaction_date ?? tx.time ?? '';
+        if (rawDate) { const d = new Date(rawDate); if (!isNaN(d)) ts = Math.floor(d.getTime() / 1000); }
       }
 
-      /* Customer / affiliate */
-      const email   = (tx.customer_email ?? tx.email ?? tx.buyer_email ?? '').toLowerCase();
-      const pid     = String(tx.product_id ?? tx.product?.id ?? tx.productId ?? '_unk');
-      const pname   = tx.product_name ?? tx.product?.name ?? tx.productName ?? tx.title ?? pid;
-      const affId   = String(tx.affiliate_id ?? tx.affiliate?.id ?? tx.affiliateId ?? '');
-      const affName = tx.affiliate_name ?? tx.affiliate?.name ?? tx.affiliateName ?? tx.affiliate ?? '';
-      const country = tx.country ?? tx.customer_country ?? tx.buyer_country ?? '';
+      /* Customer — flat or nested object */
+      const custObj = tx.customer || {};
+      const email   = (tx.customer_email ?? custObj.email ?? tx.email ?? tx.buyer_email ?? '').toLowerCase();
+      const custName = tx.customer_name ?? custObj.name ?? tx.name ?? '';
+      const country = tx.country ?? custObj.country ?? tx.customer_country ?? tx.buyer_country ?? '';
+
+      /* Product — flat or nested */
+      const prodObj = tx.product || {};
+      const pid   = String(tx.product_id ?? prodObj.id ?? tx.productId ?? '_unk');
+      const pname = tx.product_name ?? prodObj.name ?? tx.productName ?? tx.title ?? pid;
+
+      /* Affiliate — flat or nested */
+      const affObj  = tx.affiliate || {};
+      const affId   = String(tx.affiliate_id ?? affObj.id ?? tx.affiliateId ?? affObj.username ?? '');
+      const affName = tx.affiliate_name ?? affObj.name ?? affObj.username ?? tx.affiliateName ?? '';
 
       if (email) emails.add(email);
 
@@ -463,11 +485,13 @@ async function jvzoo(username, apiKey, action) {
       if (isSale) {
         gross += amt;
         orders++;
-        if (ts >= todayMid)              todayRev += amt;
+        totalFees += jvzFee;
+        if (isRebill) rebills++;
+        if (ts >= todayMid)                 todayRev += amt;
         if (ts >= ydayMid && ts < todayMid) ydayRev  += amt;
-        if (ts >= mid7)                  rev7     += amt;
-        if (ts >= mid30)                 rev30    += amt;
-        if (ts > lastSaleTs)             lastSaleTs = ts;
+        if (ts >= mid7)                     rev7     += amt;
+        if (ts >= mid30)                    rev30    += amt;
+        if (ts > lastSaleTs)                lastSaleTs = ts;
       } else if (isRef) {
         refundAmt += amt; refunds++;
       } else if (isCB) {
@@ -497,7 +521,7 @@ async function jvzoo(username, apiKey, action) {
           date: dateStr,
           type: isRef ? 'refund' : isCB ? 'chargeback' : 'sale',
           amount: amt,
-          customer: tx.customer_name ?? tx.name ?? (email ? email.split('@')[0] : '—'),
+          customer: custName || (email ? email.split('@')[0] : '—'),
           country,
           affiliate: affName || (affId || ''),
           rebill: isRebill,
@@ -535,6 +559,10 @@ async function jvzoo(username, apiKey, action) {
         unique_customers:   emails.size,
         avg_order_value:    orders > 0 ? gross / orders : 0,
         customer_ltv:       emails.size > 0 ? netRev / emails.size : 0,
+        total_platform_fees: totalFees > 0 ? totalFees : undefined,
+        seller_net_revenue:  totalFees > 0 ? gross - totalFees - refundAmt - cbAmt : undefined,
+        total_rebills:      rebills > 0 ? rebills : undefined,
+        rebill_rate:        orders > 0 && rebills > 0 ? rebills / orders * 100 : undefined,
         refund_rate:        refRate,
         refund_amount:      refundAmt,
         total_refunds:      refunds,
@@ -545,9 +573,9 @@ async function jvzoo(username, apiKey, action) {
         top_products:       prods,
         affiliates:         affs,
         recent_transactions: recentTx,
+        _api_fields:        flatSample,   /* raw field structure from first transaction */
       },
       _counts: { total: all.length, pages: page - 1 },
-      _sample: all[0] || null,
     };
   }
 
