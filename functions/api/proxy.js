@@ -124,14 +124,15 @@ async function explodely(username, apiKey, action) {
     return { success: true, offers: [], note: "Credentials saved — enter your offer name to pull sales data" };
   }
 
-  /* fetchStats — fetch 2 years then filter client-side by timestamp */
+  /* fetchStats — fetch all history then filter client-side by timestamp */
   if (action === 'fetchStats') {
     /* Try progressively shorter ranges if the long one fails */
     let all = [];
     const ranges = [
-      [daysAgo(730), today()],   // 2 years
-      [daysAgo(365), today()],   // 1 year
-      [daysAgo(90),  today()],   // 90 days fallback
+      ['01-jan-2020', today()],  // all-time (6 years)
+      [daysAgo(730),  today()],  // 2 years fallback
+      [daysAgo(365),  today()],  // 1 year fallback
+      [daysAgo(90),   today()],  // 90 days last-resort
     ];
     let fetchError = null;
     for (const [start, end] of ranges) {
@@ -203,6 +204,16 @@ async function explodely(username, apiKey, action) {
     const sorted     = [...allSales].sort((a,b) => saleTs(b) - saleTs(a));
     const lastSale   = sorted[0]?.saletimedate || '';
 
+    /* Unique customers */
+    const uniqueEmails = new Set(allSales.map(s => (s.customerEmail||'').toLowerCase().trim()).filter(Boolean));
+    const uniqueCustomers = uniqueEmails.size;
+    const customerLtv = uniqueCustomers > 0 ? totalRev / uniqueCustomers : 0;
+
+    /* Refund & chargeback dollar amounts */
+    const refundAmount = refundsOnly(allSales).reduce((s,x) => s + (parseFloat(x.amount||0)||0), 0);
+    const cbAmount     = cbOnly(allSales).reduce((s,x) => s + (parseFloat(x.amount||0)||0), 0);
+    const netRevenue   = totalRev - totalVat;
+
     /* Top affiliates */
     const affMap = {};
     allSales.forEach(s => {
@@ -226,17 +237,23 @@ async function explodely(username, apiKey, action) {
     });
     const topCountries = Object.values(ctryMap).sort((a,b)=>b.count-a.count).slice(0,8);
 
-    /* Products */
+    /* Products — with today + 7-day slices */
     const prodMap = {};
     salesOnly(allSales).forEach(s => {
-      const pid = s.productId || 'x'; const pname = s.productName || s.productId || 'Unknown';
-      if (!prodMap[pid]) prodMap[pid] = { id:pid, name:pname, revenue:0, orders:0 };
-      prodMap[pid].revenue += parseFloat(s.amount||0)||0; prodMap[pid].orders++;
+      const pid   = s.productId  || 'x';
+      const pname = s.productName || s.productId || 'Unknown';
+      if (!prodMap[pid]) prodMap[pid] = { id:pid, name:pname, revenue:0, orders:0, today:0, week7:0 };
+      const amt = parseFloat(s.amount||0)||0;
+      const ts  = saleTs(s);
+      prodMap[pid].revenue += amt;
+      prodMap[pid].orders++;
+      if (ts >= midToday) prodMap[pid].today += amt;
+      if (ts >= mid7)     prodMap[pid].week7 += amt;
     });
     const topProducts = Object.values(prodMap).sort((a,b)=>b.revenue-a.revenue);
 
-    /* Recent 15 transactions */
-    const recentTxns = sorted.slice(0,15).map(s => ({
+    /* Recent 20 transactions */
+    const recentTxns = sorted.slice(0,20).map(s => ({
       orderId:   s.orderid      || '—',
       type:      String(s.type  || 'sale').toLowerCase(),
       product:   s.productName  || s.productId || '—',
@@ -250,27 +267,36 @@ async function explodely(username, apiKey, action) {
       rebill:    s.rebill       === 'yes',
     }));
 
+    /* Format last sale date neatly */
+    const lastSaleRaw  = sorted[0]?.saletimedate || '';
+    const lastSaleFmt  = lastSaleRaw.replace(/^\d\d:\d\d:\d\d /, ''); // strip time, keep date
+
     return {
       success: true,
       raw: {
         total_revenue:      totalRev,
+        net_revenue:        netRevenue,
         today_revenue:      rev(todaySales),
         yesterday_revenue:  rev(yestSales),
         revenue_7_days:     rev(week7Sales),
         revenue_30_days:    rev(week30Sales),
         total_orders:       totalOrds,
+        unique_customers:   uniqueCustomers,
         avg_order_value:    avgOV,
+        customer_ltv:       customerLtv,
         refund_rate:        refRate,
         chargeback_rate:    cbRate,
         total_refunds:      totalRefs,
+        refund_amount:      refundAmount,
         total_chargebacks:  totalCBs,
+        chargeback_amount:  cbAmount,
         total_vat:          totalVat,
         direct_revenue:     directRev,
         affiliate_revenue:  affRev,
         rebill_revenue:     rebillRev,
         order_bump_rate:    obumpRate,
         order_bump_count:   obumps,
-        last_sale_date:     lastSale,
+        last_sale_date:     lastSaleFmt,
         affiliates,
         top_products:       topProducts,
         top_countries:      topCountries,

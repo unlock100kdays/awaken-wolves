@@ -384,7 +384,8 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
     <!-- STATS -->
     <div class="vsl-stats">
       <div class="vs-card"><span class="vs-icon">🎬</span><div class="vs-info"><span class="vs-val" id="stat-live">0</span><span class="vs-label">Live Operations</span></div></div>
-      <div class="vs-card"><span class="vs-icon">💰</span><div class="vs-info"><span class="vs-val" id="stat-rev">$0</span><span class="vs-label">Revenue Today</span></div></div>
+      <div class="vs-card"><span class="vs-icon">💰</span><div class="vs-info"><span class="vs-val" id="stat-alltime">$0</span><span class="vs-label">All-Time Revenue</span></div></div>
+      <div class="vs-card"><span class="vs-icon">📈</span><div class="vs-info"><span class="vs-val" id="stat-rev">$0</span><span class="vs-label">Revenue Today</span></div></div>
       <div class="vs-card"><span class="vs-icon">⚙️</span><div class="vs-info"><span class="vs-val" id="stat-under">0</span><span class="vs-label">Undergoing Ops</span></div></div>
       <div class="vs-card"><span class="vs-icon">🩸</span><div class="vs-info"><span class="vs-val" id="stat-complete">—</span><span class="vs-label">Avg Completion</span></div></div>
     </div>
@@ -960,24 +961,33 @@ const PCFG={Explodely:{color:'#ff5500'},JVzoo:{color:'#0077cc'},Clickbank:{color
 /* Ordered list of stat fields the proxy may return.
    Only fields present in the raw response (non-null, non-zero) will render. */
 const STAT_SPEC=[
-  {k:'total_revenue',     l:'All-Time Revenue',   f:'$',   c:'green', today:false},
-  {k:'today_revenue',     l:'Revenue Today',       f:'$',   c:'green', today:true },
-  {k:'yesterday_revenue', l:'Revenue Yesterday',   f:'$',   c:'green'             },
-  {k:'revenue_7_days',    l:'Last 7 Days',         f:'$',   c:'green'             },
-  {k:'revenue_30_days',   l:'Last 30 Days',        f:'$',   c:'green'             },
-  {k:'total_orders',      l:'Total Orders',        f:'n'                          },
-  {k:'avg_order_value',   l:'Avg Order Value',     f:'$',   c:'green'             },
-  {k:'refund_rate',       l:'Refund Rate',         f:'pct', c:'r:4:2.5'           },
-  {k:'chargeback_rate',   l:'Chargeback Rate',     f:'p2',  c:'r:0.3:0.15'        },
-  {k:'total_refunds',     l:'Total Refunds',       f:'n',   c:'red'               },
-  {k:'total_chargebacks', l:'Chargebacks',         f:'n',   c:'red'               },
-  {k:'total_vat',         l:'Total VAT / Tax',     f:'$',   c:'orange'            },
-  {k:'direct_revenue',    l:'Direct Revenue',      f:'$',   c:'green'             },
-  {k:'affiliate_revenue', l:'Affiliate Revenue',   f:'$',   c:'green'             },
-  {k:'rebill_revenue',    l:'Rebill Revenue',      f:'$',   c:'green'             },
-  {k:'order_bump_rate',   l:'Order Bump Rate',     f:'pct', c:'orange'            },
-  {k:'order_bump_count',  l:'Order Bumps Taken',   f:'n'                          },
-  {k:'last_sale_date',    l:'Last Sale',           f:'txt', full:true             },
+  /* Revenue */
+  {k:'total_revenue',      l:'All-Time Revenue',    f:'$',   c:'green', today:false, alltime:true},
+  {k:'net_revenue',        l:'Net Revenue',         f:'$',   c:'green'                           },
+  {k:'today_revenue',      l:'Revenue Today',       f:'$',   c:'green', today:true               },
+  {k:'yesterday_revenue',  l:'Revenue Yesterday',   f:'$',   c:'green'                           },
+  {k:'revenue_7_days',     l:'Last 7 Days',         f:'$',   c:'green'                           },
+  {k:'revenue_30_days',    l:'Last 30 Days',        f:'$',   c:'green'                           },
+  {k:'direct_revenue',     l:'Direct Revenue',      f:'$',   c:'green'                           },
+  {k:'affiliate_revenue',  l:'Affiliate Revenue',   f:'$',   c:'green'                           },
+  {k:'rebill_revenue',     l:'Rebill Revenue',      f:'$',   c:'green'                           },
+  /* Orders */
+  {k:'total_orders',       l:'Total Orders',        f:'n'                                         },
+  {k:'unique_customers',   l:'Unique Customers',    f:'n'                                         },
+  {k:'avg_order_value',    l:'Avg Order Value',     f:'$',   c:'green'                           },
+  {k:'customer_ltv',       l:'Customer LTV',        f:'$',   c:'green'                           },
+  /* Rates — showZero:true so 0% still renders */
+  {k:'refund_rate',        l:'Refund Rate',         f:'pct', c:'r:4:2.5',   showZero:true        },
+  {k:'refund_amount',      l:'Refund Amount',       f:'$',   c:'red'                             },
+  {k:'total_refunds',      l:'Refund Count',        f:'n',   c:'red'                             },
+  {k:'chargeback_rate',    l:'Chargeback Rate',     f:'p2',  c:'r:0.3:0.15',showZero:true        },
+  {k:'chargeback_amount',  l:'Chargeback Amount',   f:'$',   c:'red'                             },
+  {k:'total_chargebacks',  l:'Chargeback Count',    f:'n',   c:'red'                             },
+  /* Extras */
+  {k:'total_vat',          l:'Total VAT / Tax',     f:'$',   c:'orange'                          },
+  {k:'order_bump_rate',    l:'Order Bump Rate',     f:'pct', c:'orange'                          },
+  {k:'order_bump_count',   l:'Order Bumps Taken',   f:'n'                                         },
+  {k:'last_sale_date',     l:'Last Sale',           f:'txt', full:true                            },
 ];
 function fmtStat(f,v){
   if(f==='$')  return fmt(v);
@@ -1032,23 +1042,27 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr){
   /* ── Build stat grid from STAT_SPEC — only fields with real values */
   const statTiles=STAT_SPEC.filter(spec=>{
     const v=raw[spec.k];
-    return v!=null&&v!==0&&v!=='';
+    if(v==null||v==='') return false;
+    return spec.showZero ? true : v!==0;
   }).map(spec=>{
     const v=raw[spec.k];
     const cls=statCls(spec,v);
     const todayAttr=spec.today?' data-today="1"':'';
+    const alltimeAttr=spec.alltime?' data-alltime="1"':'';
     const fullCls=spec.full?' full':'';
-    return`<div class="df-item${fullCls}"><span class="df-label">${spec.l}</span><span class="df-value ${cls}"${todayAttr}>${fmtStat(spec.f,v)}</span></div>`;
+    return`<div class="df-item${fullCls}"><span class="df-label">${spec.l}</span><span class="df-value ${cls}"${todayAttr}${alltimeAttr}>${fmtStat(spec.f,v)}</span></div>`;
   }).join('');
 
   /* ── Products */
   const prods=Array.isArray(raw.top_products)?raw.top_products:[];
-  const prodsHTML=prods.length>1?`
+  const prodsHTML=prods.length>0?`
     <div class="ex-block">
       <div class="ex-title">Products on Account (${prods.length})</div>
-      ${prods.map(p=>`<div class="ex-row prod-row">
+      ${prods.map(p=>`<div class="ex-row" style="grid-template-columns:1fr auto auto auto auto">
         <span class="ex-name">${escHtml(p.name||p.id||'?')}</span>
         <span class="ex-sub">${p.orders} orders</span>
+        ${p.today>0?`<span class="ex-sub" title="Today">↑${fmt(p.today)}</span>`:'<span></span>'}
+        ${p.week7>0?`<span class="ex-sub" title="7 days">7d:${fmt(p.week7)}</span>`:'<span></span>'}
         <span class="ex-val green">${fmt(p.revenue)}</span>
       </div>`).join('')}
     </div>`:'';
@@ -1270,9 +1284,11 @@ function updateStats(){
   const under=document.querySelectorAll('.project-card').length;
   document.getElementById('stat-live').textContent=live;
   document.getElementById('stat-under').textContent=under;
-  let totalRev=0;
+  let totalRev=0,totalAllTime=0;
   document.querySelectorAll('[data-today="1"]').forEach(v=>{totalRev+=parseFloat(v.textContent.replace(/[$,]/g,''))||0;});
+  document.querySelectorAll('[data-alltime="1"]').forEach(v=>{totalAllTime+=parseFloat(v.textContent.replace(/[$,]/g,''))||0;});
   document.getElementById('stat-rev').textContent=totalRev>0?fmt(totalRev):'$0';
+  document.getElementById('stat-alltime').textContent=totalAllTime>0?fmt(totalAllTime):'$0';
   const fills=[...document.querySelectorAll('.pc-progress-fill')];
   if(fills.length){const avg=Math.round(fills.reduce((s,f)=>s+parseFloat(f.style.width||0),0)/fills.length);document.getElementById('stat-complete').textContent=avg+'%';}
   else{document.getElementById('stat-complete').textContent='—';}
