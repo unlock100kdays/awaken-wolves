@@ -470,6 +470,10 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
     <div id="step-creds" class="m-step">
       <div id="creds-saved-banner"></div>
       <div id="creds-form-area">
+        <div class="form-group" id="username-row" style="display:none">
+          <label class="form-label" id="username-label">Username</label>
+          <input class="form-input" id="inp-username" type="text" placeholder="Your platform username…" autocomplete="username"/>
+        </div>
         <div class="form-group">
           <label class="form-label">API Key</label>
           <input class="form-input" id="inp-api-key" type="password" placeholder="Paste your API key…" autocomplete="new-password"/>
@@ -599,7 +603,7 @@ function saveState(){
 }
 
 function loadCreds(){try{return JSON.parse(localStorage.getItem(C_KEY))||{};}catch{return {};}}
-function saveCreds(plat,key,sec){const all=loadCreds();all[plat]={apiKey:key,apiSecret:sec||'',savedAt:Date.now()};localStorage.setItem(C_KEY,JSON.stringify(all));}
+function saveCreds(plat,key,sec,user){const all=loadCreds();all[plat]={apiKey:key,apiSecret:sec||'',username:user||'',savedAt:Date.now()};localStorage.setItem(C_KEY,JSON.stringify(all));}
 function getCredFor(plat){return loadCreds()[plat]||null;}
 function clearCred(plat){const all=loadCreds();delete all[plat];localStorage.setItem(C_KEY,JSON.stringify(all));}
 
@@ -629,11 +633,11 @@ function restoreAll(){
    PLATFORM CONFIGS
 ══════════════════════════════════════════ */
 const PLAT={
-  Explodely:{color:'#ff5500',needsSecret:false,secretLabel:''},
-  JVzoo:    {color:'#0077cc',needsSecret:true, secretLabel:'API Secret'},
-  Clickbank:{color:'#00aa44',needsSecret:true, secretLabel:'Clerk Key (Dev API Key)'},
-  Cartpanda:{color:'#9900cc',needsSecret:false,secretLabel:''},
-  Digistore:{color:'#cc7700',needsSecret:false,secretLabel:''},
+  Explodely:{color:'#ff5500',needsSecret:false,needsUsername:true, secretLabel:'',         userLabel:'Explodely Username'},
+  JVzoo:    {color:'#0077cc',needsSecret:false,needsUsername:true, secretLabel:'',         userLabel:'JVzoo Username'},
+  Clickbank:{color:'#00aa44',needsSecret:true, needsUsername:false,secretLabel:'Clerk Key (Dev Key)',userLabel:''},
+  Cartpanda:{color:'#9900cc',needsSecret:false,needsUsername:false,secretLabel:'',         userLabel:''},
+  Digistore:{color:'#cc7700',needsSecret:false,needsUsername:false,secretLabel:'',         userLabel:''},
 };
 
 /* ══════════════════════════════════════════
@@ -662,24 +666,29 @@ function choosePlatform(el){
   document.querySelectorAll('.plat-chip').forEach(c=>c.classList.remove('selected'));
   el.classList.add('selected');
   MP=el.dataset.plat;
-  const cfg=PLAT[MP]||{needsSecret:false};
+  const cfg=PLAT[MP]||{needsSecret:false,needsUsername:false};
   document.getElementById('mo-title').textContent=`🔑 Connect ${MP}`;
   document.getElementById('secret-row').style.display=cfg.needsSecret?'':'none';
   document.getElementById('secret-label').textContent=cfg.secretLabel||'API Secret';
+  document.getElementById('username-row').style.display=cfg.needsUsername?'':'none';
+  document.getElementById('username-label').textContent=cfg.userLabel||'Username';
   document.getElementById('inp-api-key').value='';
   document.getElementById('inp-api-secret').value='';
+  document.getElementById('inp-username').value='';
   document.getElementById('creds-status').className='status-msg';
   document.getElementById('creds-status').textContent='';
 
   const saved=getCredFor(MP);
   const banner=document.getElementById('creds-saved-banner');
   if(saved){
-    banner.innerHTML=`<div class="saved-creds-banner">✓ ${MP} API key already saved — click below to fetch your offers <button class="change-creds" onclick="clearAndReenter('${MP}')">Change</button></div>`;
+    const uname=saved.username?` (${saved.username})`:'';
+    banner.innerHTML=`<div class="saved-creds-banner">✓ ${MP} credentials saved${uname} — click below to fetch your offers <button class="change-creds" onclick="clearAndReenter('${MP}')">Change</button></div>`;
     document.getElementById('creds-form-area').style.display='none';
     document.getElementById('btn-fetch').textContent='Fetch Offers →';
   } else {
     banner.innerHTML='';
     document.getElementById('creds-form-area').style.display='';
+    document.getElementById('btn-fetch').textContent='Fetch Offers from Account →';
   }
   showStep('step-creds');
 }
@@ -690,23 +699,27 @@ function clearAndReenter(plat){
   document.getElementById('creds-form-area').style.display='';
   document.getElementById('inp-api-key').value='';
   document.getElementById('inp-api-secret').value='';
+  document.getElementById('inp-username').value='';
 }
 
 async function submitCreds(){
   const saved=getCredFor(MP);
-  let apiKey,apiSec;
+  let apiKey,apiSec,username;
   if(saved){
-    apiKey=saved.apiKey;apiSec=saved.apiSecret||'';
+    apiKey=saved.apiKey;apiSec=saved.apiSecret||'';username=saved.username||'';
   } else {
     apiKey=document.getElementById('inp-api-key').value.trim();
     apiSec=document.getElementById('inp-api-secret').value.trim();
+    username=document.getElementById('inp-username').value.trim();
     if(!apiKey){document.getElementById('inp-api-key').style.borderColor='rgba(220,0,0,.7)';setTimeout(()=>document.getElementById('inp-api-key').style.borderColor='',1200);return;}
-    saveCreds(MP,apiKey,apiSec);
+    const cfg=PLAT[MP]||{};
+    if(cfg.needsUsername&&!username){document.getElementById('inp-username').style.borderColor='rgba(220,0,0,.7)';setTimeout(()=>document.getElementById('inp-username').style.borderColor='',1200);return;}
+    saveCreds(MP,apiKey,apiSec,username);
   }
   const st=document.getElementById('creds-status');
   st.className='status-msg loading show';st.textContent=`Connecting to ${MP}…`;
   document.getElementById('btn-fetch').disabled=true;
-  await loadOffers(MP,{apiKey,apiSecret:apiSec});
+  await loadOffers(MP,{apiKey,apiSecret:apiSec,username});
   document.getElementById('btn-fetch').disabled=false;
 }
 
@@ -725,18 +738,15 @@ async function loadOffers(plat,creds){
   }
 
   const offerSt=document.getElementById('offer-status');
-  if(res.corsBlocked){
+  if(res.error){
     offerSt.className='status-msg warn show';
-    offerSt.textContent=`✓ API key saved. ${plat} blocks browser calls — enter your offer name manually below.`;
-  } else if(res.error){
-    offerSt.className='status-msg error show';
-    offerSt.textContent=`${res.error} — Enter offer name manually.`;
+    offerSt.textContent=`⚠ ${res.error} — API credentials saved. Enter offer name manually below.`;
   } else if(MOffers.length){
     offerSt.className='status-msg success show';
-    offerSt.textContent=`✓ Found ${MOffers.length} offers on ${plat}`;
+    offerSt.textContent=`✓ Found ${MOffers.length} offer${MOffers.length>1?'s':''} on ${plat} — select one or type manually`;
   } else {
     offerSt.className='status-msg warn show';
-    offerSt.textContent='No offers found via API — enter name manually.';
+    offerSt.textContent='No offers returned from API — enter offer name manually.';
   }
 
   document.getElementById('inp-offer-manual').value='';
@@ -778,119 +788,73 @@ async function connectOffer(){
 }
 
 /* ══════════════════════════════════════════
-   REAL API CALLS (attempt, handle CORS)
+   API CALLS — via Cloudflare Pages Function proxy
+   /api/proxy handles all cross-origin calls server-side
 ══════════════════════════════════════════ */
+async function callProxy(payload){
+  const r=await fetch('/api/proxy',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload)
+  });
+  if(!r.ok)throw new Error(`Proxy HTTP ${r.status}`);
+  const d=await r.json();
+  if(!d.success)throw new Error(d.error||'Proxy error');
+  return d;
+}
+
 async function apiFetchOffers(plat,creds){
-  const {apiKey,apiSecret}=creds;
   try{
-    let url,opts={headers:{'Accept':'application/json'},mode:'cors'};
-    switch(plat){
-      case 'Explodely':
-        url='https://app.explodely.com/api/v1/products';
-        opts.headers['Authorization']=`Bearer ${apiKey}`;
-        break;
-      case 'JVzoo':
-        return await jvzooFetchProducts(apiKey,apiSecret);
-      case 'Clickbank':
-        url='https://api.clickbank.com/rest/1.3/products/list';
-        opts.headers['Authorization']=`${apiKey}:${apiSecret}`;
-        break;
-      case 'Cartpanda':
-        url='https://api.cartpanda.com.br/v1/products';
-        opts.headers['Authorization']=`Bearer ${apiKey}`;
-        break;
-      case 'Digistore':
-        url=`https://www.digistore24.com/api/call/${apiKey}/listProducts/json`;
-        break;
-      default:
-        return {offers:[],error:'Unknown platform'};
-    }
-    const r=await fetch(url,opts);
-    if(!r.ok)throw new Error(`HTTP ${r.status}`);
-    const d=await r.json();
-    return {offers:parseOfferList(plat,d)};
+    const d=await callProxy({platform:plat,apiKey:creds.apiKey,apiSecret:creds.apiSecret||'',username:creds.username||'',action:'fetchOffers'});
+    return{offers:d.offers||[]};
   }catch(e){
-    const cors=e instanceof TypeError||e.message.includes('Failed to fetch')||e.message.includes('CORS');
-    return {offers:[],corsBlocked:cors,error:cors?null:e.message};
+    return{offers:[],error:e.message};
   }
-}
-
-async function jvzooFetchProducts(apiKey,apiSecret){
-  try{
-    const body=new URLSearchParams({apikey:apiKey,output:'json',cmd:'listProducts'});
-    const r=await fetch('https://www.jvzoo.com/api/loadapi.php',{method:'POST',body,headers:{'Content-Type':'application/x-www-form-urlencoded'},mode:'cors'});
-    if(!r.ok)throw new Error(`HTTP ${r.status}`);
-    const d=await r.json();
-    return {offers:(d.products||[]).map(p=>({id:p.id,name:p.name||p.title||String(p.id)}))};
-  }catch(e){
-    const cors=e instanceof TypeError||e.message.includes('Failed to fetch');
-    return {offers:[],corsBlocked:cors,error:cors?null:e.message};
-  }
-}
-
-function parseOfferList(plat,d){
-  const arr=d.products||d.data?.products||d.items||d.result||d;
-  if(!Array.isArray(arr))return[];
-  return arr.map(p=>({id:String(p.id||p.product_id||p.sku||''),name:String(p.name||p.title||p.product_name||p.id||'')})).filter(p=>p.name);
 }
 
 async function apiFetchStats(plat,creds,offerId,offerName){
-  const{apiKey,apiSecret}=creds;
   try{
-    let url,opts={headers:{'Accept':'application/json'},mode:'cors'};
-    switch(plat){
-      case 'Explodely':
-        url=`https://app.explodely.com/api/v1/products/${offerId}/analytics`;
-        opts.headers['Authorization']=`Bearer ${apiKey}`;
-        break;
-      case 'Clickbank':
-        url=`https://api.clickbank.com/rest/1.3/sales/analytics/snapshot?site=${offerId}`;
-        opts.headers['Authorization']=`${apiKey}:${apiSecret}`;
-        break;
-      case 'Digistore':
-        url=`https://www.digistore24.com/api/call/${apiKey}/listProductStats/json?product_id=${offerId}`;
-        break;
-      case 'JVzoo':
-        const body=new URLSearchParams({apikey:apiKey,output:'json',cmd:'sellerStats',productid:offerId});
-        const r2=await fetch('https://www.jvzoo.com/api/loadapi.php',{method:'POST',body,headers:{'Content-Type':'application/x-www-form-urlencoded'},mode:'cors'});
-        if(!r2.ok)throw new Error(`HTTP ${r2.status}`);
-        return{data:parseStats(plat,await r2.json(),offerName)};
-      default:
-        return{data:genFallback(offerName)};
-    }
-    const r=await fetch(url,opts);
-    if(!r.ok)throw new Error(`HTTP ${r.status}`);
-    return{data:parseStats(plat,await r.json(),offerName)};
+    const d=await callProxy({platform:plat,apiKey:creds.apiKey,apiSecret:creds.apiSecret||'',username:creds.username||'',action:'fetchStats',offerId});
+    return{data:parseStats(plat,d.raw||{},d.affRaw||{},offerName)};
   }catch(e){
     return{data:genFallback(offerName)};
   }
 }
 
-function parseStats(plat,raw,name){
-  const s=raw.stats||raw.analytics||raw.data||raw||{};
-  const affRaw=s.top_affiliates||s.affiliates||s.topAffiliates||[];
+function parseStats(plat,raw,affRaw,name){
+  const s=raw?.data||raw?.stats||raw?.analytics||raw||{};
   const n=v=>Number(v)||0;
-  const refRaw=n(s.refund_rate||s.refunds_percentage||s.refundRate||0);
+  const refRaw=n(s.refund_rate||s.refunds_percentage||s.refund_rate_percent||s.refundRate||0);
   const cbRaw=n(s.chargeback_rate||s.chargebackRate||0);
+  /* Affiliates: proxy may return them in raw or affRaw */
+  const affArr=(()=>{
+    const a=s.top_affiliates||s.affiliates||s.topAffiliates||s.affiliate_list||[];
+    if(a.length)return a;
+    const b=affRaw?.affiliates||affRaw?.data?.affiliates||affRaw?.data||affRaw?.items||affRaw||[];
+    return Array.isArray(b)?b:[];
+  })();
   return{
-    revenueAllTime:  fmt(s.total_revenue||s.revenue_all_time||s.gross_revenue||0),
-    revenueToday:    fmt(s.today_revenue||s.revenue_today||s.daily_revenue||0),
-    revenueYesterday:fmt(s.yesterday_revenue||s.revenue_yesterday||0),
-    revenue7Days:    fmt(s.revenue_7_days||s.last_7_days||s.weekly_revenue||0),
-    totalOrders:     n(s.total_orders||s.orders_count||s.sales_count||0).toLocaleString(),
-    avgOrderValue:   fmt(s.avg_order_value||s.aov||0),
-    conversionRate:  pct(s.conversion_rate||s.cvr||0),
+    revenueAllTime:  fmt(s.total_revenue||s.revenue_all_time||s.gross_revenue||s.totalRevenue||0),
+    revenueToday:    fmt(s.today_revenue||s.revenue_today||s.daily_revenue||s.todayRevenue||0),
+    revenueYesterday:fmt(s.yesterday_revenue||s.revenue_yesterday||s.yesterdayRevenue||0),
+    revenue7Days:    fmt(s.revenue_7_days||s.last_7_days||s.weekly_revenue||s.last7DaysRevenue||0),
+    totalOrders:     n(s.total_orders||s.orders_count||s.sales_count||s.totalOrders||0).toLocaleString(),
+    avgOrderValue:   fmt(s.avg_order_value||s.aov||s.avgOrderValue||0),
+    conversionRate:  fmtPct(s.conversion_rate||s.cvr||s.conversionRate||0),
     epc:             '$'+n(s.epc||0).toFixed(2),
     refundRate:      refRaw>1?refRaw.toFixed(1)+'%':(refRaw*100).toFixed(1)+'%',
     chargebackRate:  cbRaw>1?cbRaw.toFixed(2)+'%':(cbRaw*100).toFixed(2)+'%',
-    topAffiliates:   affRaw.slice(0,10).map((a,i)=>({
-      rank:i+1,name:a.name||a.affiliate_name||a.username||a.email?.split('@')[0]||`Affiliate ${i+1}`,
-      revenue:fmt(a.revenue||a.total_revenue||a.earned||0),
-      sales:n(a.sales||a.orders||a.referrals||0),
+    topAffiliates:   affArr.slice(0,10).map((a,i)=>({
+      rank:i+1,
+      name:a.name||a.affiliate_name||a.affiliateName||a.username||a.email?.split('@')[0]||`Affiliate ${i+1}`,
+      revenue:fmt(a.revenue||a.total_revenue||a.totalRevenue||a.earned||a.commission||0),
+      sales:n(a.sales||a.orders||a.referrals||a.units||0),
       epc:'$'+n(a.epc||0).toFixed(2)
     }))
   };
 }
+
+function fmtPct(v,d=2){const n=Number(v)||0;return(n>1?n:n*100).toFixed(d)+'%';}
 
 function genFallback(name){
   const base=rnd(50000,320000);
