@@ -439,7 +439,7 @@ async function jvzoo(username, apiKey, action) {
     if (all.length === 0) return { success: false, error: 'JVZoo returned 0 transactions. Check API key.' };
 
     /* ── Compute stats from raw transactions ── */
-    const now   = Math.floor(Date.now() / 1000);
+    const nowTs = Math.floor(Date.now() / 1000);
     const todayMid   = Math.floor(new Date(new Date().setUTCHours(0,0,0,0)).getTime() / 1000);
     const ydayMid    = todayMid - 86400;
     const mid7       = todayMid - 6 * 86400;
@@ -477,7 +477,7 @@ async function jvzoo(username, apiKey, action) {
       /* Customer — JVZoo v3.0 flat fields */
       const email    = (tx.customer_email ?? tx.email ?? '').toLowerCase();
       const custName = [tx.customer_first_name, tx.customer_last_name].filter(Boolean).join(' ')
-                    || tx.customer_name ?? '';
+                    || (tx.customer_name ?? '');
       const country  = tx.customer_country ?? tx.country ?? '';
 
       /* Product */
