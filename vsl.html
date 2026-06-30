@@ -1767,6 +1767,9 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
       <div class="data-grid">${statTiles}</div>
       ${prodsHTML}${affHTML}${txnHTML}
       <button class="refresh-btn" onclick="refreshOffer('${cid}')">🔄 Refresh Data</button>
+      ${isJVZ?`<button class="refresh-btn" style="color:rgba(255,160,0,.7);border-color:rgba(255,160,0,.25);margin-left:6px" onclick="clearJvzSyncAndRefresh('${cid}','${escHtml(name)}')">↺ Reset Sync</button>`:''}
+      ${isJVZ?`<span class="refresh-btn" style="border:none;color:rgba(130,130,145,.4);font-size:.52rem;letter-spacing:.06em;padding-left:4px">JVZoo API covers data from ~Jan 2026 only — pre-2026 history not exposed via API</span>`:''}
+
     </div>`;
   list.appendChild(card);
   if(!fromRestore){updateStats();saveState();}
@@ -1777,6 +1780,11 @@ function toggleCard(header,bodyClass){
   const tog=header.querySelector('.oc-toggle,.pc-toggle');
   const c=body.classList.toggle('collapsed');
   if(tog)tog.classList.toggle('open',!c);
+}
+
+function clearJvzSyncAndRefresh(cardId,offerName){
+  try{ localStorage.removeItem(jvzSyncKey(offerName)); }catch{}
+  refreshOffer(cardId);
 }
 
 function removeCard(e,btn){
