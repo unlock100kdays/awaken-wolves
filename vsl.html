@@ -1783,7 +1783,12 @@ function toggleCard(header,bodyClass){
 }
 
 function clearJvzSyncAndRefresh(cardId,offerName){
+  /* Clear both the incremental sync cache (jvzoo_sync_v1::) AND the
+     page-level saveState blob for this card so a mid-sync page reload
+     shows a clean "no cached data" state instead of the old stale number. */
   try{ localStorage.removeItem(jvzSyncKey(offerName)); }catch{}
+  const card=document.querySelector(`[data-id="${cardId}"]`);
+  if(card){ card.dataset.blob='null'; saveState(); }
   refreshOffer(cardId);
 }
 
