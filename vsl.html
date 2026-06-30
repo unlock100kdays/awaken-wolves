@@ -992,7 +992,7 @@ async function apiFetchOffers(plat,creds){
 }
 
 async function apiFetchStats(plat,creds,offerId,offerName,dateRange){
-  if(plat==='JVzoo') return apiFetchJvzooStats(creds);
+  if(plat==='JVzoo') return apiFetchJvzooStats(creds,offerName);
   if(plat==='Explodely') return apiFetchExplodelyStats(creds);
   try{
     const payload={platform:plat,apiKey:creds.apiKey,apiSecret:creds.apiSecret||'',username:creds.username||'',action:'fetchStats',offerId};
@@ -1005,121 +1005,150 @@ async function apiFetchStats(plat,creds,offerId,offerName,dateRange){
   }
 }
 
-/* JVZoo — chunked fetch, all-time: like Explodely, pull the account's full
-   history in one go (no date-range picker) and compute every period
-   (today/yesterday/7d/30d/all-time) from that single dataset client-side.
-   Large ranges (e.g. one year can be 130+ pages) exceed Cloudflare's per-request
-   subrequest cap, so we call the proxy repeatedly with increasing pageOffset. */
-async function apiFetchJvzooStats(creds){
+/* JVZoo — incremental sync. A full all-time fetch is ~9 minutes for a ~36k-
+   transaction account (48 sequential chunks — parallelizing them triggered
+   timeouts/rate-limiting on JVZoo's side, so chunks stay sequential). Instead
+   of re-paying that cost on every refresh, we do it ONCE, then persist a
+   compact sync state in localStorage: a cumulative baseline (`cum`) for
+   everything older than a 31-day rolling window, plus the raw transactions
+   inside that window (`recentTx`, trimmed to just the fields we need). Every
+   later refresh only fetches what's NEW since the last sync — typically a
+   handful of transactions — folds anything that's aged out of the window
+   into `cum`, and recomputes stats from `cum` + the (now smaller) `recentTx`. */
+const JVZ_ROLLING_DAYS=31;
+const JVZ_SYNC_PREFIX='jvzoo_sync_v1::';
+function jvzSyncKey(offerName){ return JVZ_SYNC_PREFIX+(offerName||'default'); }
+function loadJvzSync(offerName){
   try{
-    const all=[];
-    const seen=new Set();
-    let offset=0, guard=0, prevOffset=-1, sameOffsetRetries=0;
-    while(guard++<300){ /* hard safety cap: 300 chunks × 15 pages = 4500 pages max */
-      if(offset===prevOffset){
-        sameOffsetRetries++;
-        if(sameOffsetRetries>5) throw new Error(`JVZoo: page ${offset} kept failing after repeated retries — stopping rather than return incomplete data`);
-        await new Promise(r=>setTimeout(r,500*sameOffsetRetries));
-      }else{
-        sameOffsetRetries=0;
-      }
-      prevOffset=offset;
-      const payload={platform:'JVzoo',apiKey:creds.apiKey,username:creds.username||'',action:'fetchTxChunk',dateRange:'alltime',pageOffset:offset,pageLimit:15};
-      let d;
-      try{ d=await callProxy(payload); }
-      catch{ continue; } /* counted via sameOffsetRetries above since offset is unchanged */
-      for(const t of (d.transactions||[])){
-        const key=String(t.transaction_id ?? `${t.sale_date}|${t.amount}`);
-        if(!seen.has(key)){seen.add(key);all.push(t);}
-      }
-      if(!d.meta || d.meta.next_offset===null || d.meta.next_offset===undefined) break;
-      offset=d.meta.next_offset;
-    }
-    if(all.length===0) return{raw:null,err:'JVZoo returned 0 transactions. Check credentials.'};
-    const raw=aggregateJvzoo(all);
-    return{raw,counts:{total:all.length}};
-  }catch(e){
-    console.error('[JVzoo] fetchStats error:',e.message);
-    return{raw:null,err:e.message};
-  }
+    const raw=localStorage.getItem(jvzSyncKey(offerName));
+    const d=raw?JSON.parse(raw):null;
+    return (d && d.cum && Array.isArray(d.recentTx) && typeof d.lastSyncDate==='string') ? d : null;
+  }catch{ return null; }
+}
+function saveJvzSync(offerName,state){
+  try{ localStorage.setItem(jvzSyncKey(offerName), JSON.stringify(state)); }
+  catch(e){ console.error('[JVzoo] failed to save sync state (localStorage full?):',e.message); }
 }
 
-/* Aggregates the account's FULL transaction history into one flat stats object
-   (same shape as aggregateExplodely) so the card renders via the generic
-   STAT_SPEC tile grid — no per-range refetching needed.
-   Sales are bucketed by sale_date; refunds/chargebacks are bucketed by the date
-   they were actually processed (refund_date, falling back to sale_date) so
-   "Revenue Today" reflects money that moved today, matching JVZoo's own
-   Report Center semantics from the old per-range version of this function. */
-function aggregateJvzoo(all){
+/* Trim a raw JVZoo transaction down to just the fields aggregation needs —
+   keeps the rolling-window cache small (full records carry a lot of unused
+   UTM/tracking data). */
+function jvzTrim(tx){
+  const c=tx.customer||{}, aff=tx.affiliate||{}, p=tx.payouts||{};
+  return{
+    transaction_id:tx.transaction_id, sale_date:tx.sale_date, amount:tx.amount, status:tx.status,
+    product_id:tx.product_id, product_name:tx.product_name,
+    customer:{email:c.email,first_name:c.first_name,last_name:c.last_name,country:c.country},
+    affiliate:aff.id!=null?{id:aff.id,display_name:aff.display_name}:undefined,
+    refund:tx.refund?.refund_date?{refund_date:tx.refund.refund_date}:undefined,
+    payouts:{jvzoo_fee:p.jvzoo_fee,seller_earnings:p.seller_earnings},
+  };
+}
+
+/* Classify one transaction — shared by the cumulative fold and the rolling-
+   window aggregation so both treat refunds/chargebacks identically (bucketed
+   by refund_date when present, so "Revenue Today" reflects money that moved
+   today even if the original sale was old). */
+function jvzClassify(tx){
+  const amt=parseFloat(tx.amount??0)||0;
+  const jvzFee=parseFloat(tx.payouts?.jvzoo_fee??0)||0;
+  const sellerNet=parseFloat(tx.payouts?.seller_earnings??0)||0;
+  const status=String(tx.status??'').toUpperCase();
+  const isRef=status.includes('REFUND');
+  const isCB=status.includes('CHARG')||status.includes('DISPUT')||status.includes('CGBK');
+  const isSale=!isRef&&!isCB;
+  let txDate=null; if(tx.sale_date){const d=new Date(tx.sale_date);if(!isNaN(d))txDate=d;}
+  let refDate=null; if(tx.refund?.refund_date){const d=new Date(tx.refund.refund_date);if(!isNaN(d))refDate=d;}
+  const eventDate=(isRef||isCB)?(refDate||txDate):txDate;
+  const ts=eventDate?Math.floor(eventDate.getTime()/1000):0;
+  const cust=tx.customer??{};
+  const email=(cust.email??'').toLowerCase();
+  const custName=[cust.first_name,cust.last_name].filter(Boolean).join(' ');
+  const country=cust.country??'';
+  const pid=String(tx.product_id??'_unk');
+  const pname=tx.product_name??pid;
+  const aff=tx.affiliate??{};
+  const affId=String(aff.id??'');
+  const affName=aff.display_name??'';
+  return{amt,jvzFee,sellerNet,isRef,isCB,isSale,ts,email,custName,country,pid,pname,affId,affName};
+}
+
+function newJvzCum(){
+  return{netKept:0,sellerGross:0,refundAmt:0,cbAmt:0,totalFees:0,orders:0,refunds:0,cbs:0,emails:[],prodMap:{},affMap:{},lastSaleTs:0};
+}
+
+/* Fold a batch of (now stale) transactions into the cumulative baseline. */
+function foldIntoJvzCum(cum,txs){
+  const emailSet=new Set(cum.emails);
+  for(const raw of txs){
+    const c=jvzClassify(raw);
+    if(c.email) emailSet.add(c.email);
+    if(c.isSale){ cum.netKept+=c.amt; cum.sellerGross+=c.sellerNet; cum.orders++; cum.totalFees+=c.jvzFee; if(c.ts>cum.lastSaleTs)cum.lastSaleTs=c.ts; }
+    else if(c.isRef){ cum.refundAmt+=c.amt; cum.refunds++; }
+    else if(c.isCB){ cum.cbAmt+=c.amt; cum.cbs++; }
+
+    if(!cum.prodMap[c.pid]) cum.prodMap[c.pid]={id:c.pid,name:c.pname,revenue:0,orders:0,refunds:0,chargebacks:0};
+    const p=cum.prodMap[c.pid];
+    if(c.isRef){p.revenue-=c.amt;p.refunds++;}
+    else if(c.isCB){p.revenue-=c.amt;p.chargebacks++;}
+    else if(c.isSale){p.revenue+=c.amt;p.orders++;}
+
+    if(c.affId){
+      if(!cum.affMap[c.affId]) cum.affMap[c.affId]={id:c.affId,name:c.affName||c.affId,sales:0,revenue:0};
+      if(c.isSale){cum.affMap[c.affId].sales++;cum.affMap[c.affId].revenue+=c.amt;}
+    }
+  }
+  cum.emails=[...emailSet];
+  return cum;
+}
+
+/* Combine the cumulative baseline with the rolling window's raw transactions
+   into the same flat stats shape aggregateExplodely returns. today/yesterday/
+   7d/30d only ever need the rolling window, since `cum` is guaranteed older
+   than JVZ_ROLLING_DAYS. */
+function aggregateJvzooCombined(cum,recentTx){
   const utcMidnight=(daysBack)=>{const d=new Date();d.setUTCHours(0,0,0,0);return Math.floor(d.getTime()/1000)-daysBack*86400;};
   const midToday=utcMidnight(0),midYest=utcMidnight(1),mid7=utcMidnight(7),mid30=utcMidnight(30);
 
-  let netKept=0,sellerGross=0,refundAmt=0,cbAmt=0,totalFees=0;
-  let orders=0,refunds=0,cbs=0,lastSaleTs=0;
-  const emails=new Set();
-  const prodMap={},affMap={};
-  const recentTx=[];
+  let netKept=cum.netKept,sellerGross=cum.sellerGross,refundAmt=cum.refundAmt,cbAmt=cum.cbAmt,totalFees=cum.totalFees;
+  let orders=cum.orders,refunds=cum.refunds,cbs=cum.cbs,lastSaleTs=cum.lastSaleTs;
+  const emails=new Set(cum.emails);
+  const prodMap=JSON.parse(JSON.stringify(cum.prodMap));
+  const affMap=JSON.parse(JSON.stringify(cum.affMap));
+  const recentTxOut=[];
   const bucketed=[];
 
-  const sorted=[...all].sort((a,b)=>new Date(b.sale_date||0)-new Date(a.sale_date||0));
+  const sorted=[...recentTx].sort((a,b)=>new Date(b.sale_date||0)-new Date(a.sale_date||0));
 
-  for(const tx of sorted){
-    const amt=parseFloat(tx.amount??0)||0;
-    const jvzFee=parseFloat(tx.payouts?.jvzoo_fee??0)||0;
-    const sellerNet=parseFloat(tx.payouts?.seller_earnings??0)||0;
-    const status=String(tx.status??'').toUpperCase();
-    const isRef=status.includes('REFUND');
-    const isCB=status.includes('CHARG')||status.includes('DISPUT')||status.includes('CGBK');
-    const isSale=!isRef&&!isCB;
+  for(const raw of sorted){
+    const c=jvzClassify(raw);
+    if(c.email) emails.add(c.email);
+    if(c.isSale){ netKept+=c.amt; sellerGross+=c.sellerNet; orders++; totalFees+=c.jvzFee; if(c.ts>lastSaleTs)lastSaleTs=c.ts; }
+    else if(c.isRef){ refundAmt+=c.amt; refunds++; }
+    else if(c.isCB){ cbAmt+=c.amt; cbs++; }
 
-    let txDate=null;
-    if(tx.sale_date){const d=new Date(tx.sale_date);if(!isNaN(d))txDate=d;}
-    let refDate=null;
-    if(tx.refund?.refund_date){const d=new Date(tx.refund.refund_date);if(!isNaN(d))refDate=d;}
-    const eventDate=(isRef||isCB)?(refDate||txDate):txDate;
-    const ts=eventDate?Math.floor(eventDate.getTime()/1000):0;
+    if(!prodMap[c.pid]) prodMap[c.pid]={id:c.pid,name:c.pname,revenue:0,orders:0,refunds:0,chargebacks:0};
+    const p=prodMap[c.pid];
+    if(c.isRef){p.revenue-=c.amt;p.refunds++;}
+    else if(c.isCB){p.revenue-=c.amt;p.chargebacks++;}
+    else if(c.isSale){p.revenue+=c.amt;p.orders++;}
 
-    const cust=tx.customer??{};
-    const email=(cust.email??'').toLowerCase();
-    const custName=[cust.first_name,cust.last_name].filter(Boolean).join(' ');
-    const country=cust.country??'';
-    const pid=String(tx.product_id??'_unk');
-    const pname=tx.product_name??pid;
-    const aff=tx.affiliate??{};
-    const affId=String(aff.id??'');
-    const affName=aff.display_name??'';
-
-    if(email)emails.add(email);
-
-    if(isSale){
-      netKept+=amt;sellerGross+=sellerNet;orders++;totalFees+=jvzFee;
-      if(ts>lastSaleTs)lastSaleTs=ts;
-    }else if(isRef){refundAmt+=amt;refunds++;}
-      else if(isCB){cbAmt+=amt;cbs++;}
-
-    if(!prodMap[pid])prodMap[pid]={id:pid,name:pname,revenue:0,orders:0,refunds:0,chargebacks:0};
-    const p=prodMap[pid];
-    if(isRef){p.revenue-=amt;p.refunds++;}
-    else if(isCB){p.revenue-=amt;p.chargebacks++;}
-    else if(isSale){p.revenue+=amt;p.orders++;}
-
-    if(affId){
-      if(!affMap[affId])affMap[affId]={id:affId,name:affName||affId,sales:0,revenue:0};
-      if(isSale){affMap[affId].sales++;affMap[affId].revenue+=amt;}
+    if(c.affId){
+      if(!affMap[c.affId]) affMap[c.affId]={id:c.affId,name:c.affName||c.affId,sales:0,revenue:0};
+      if(c.isSale){affMap[c.affId].sales++;affMap[c.affId].revenue+=c.amt;}
     }
 
-    if(recentTx.length<25){
-      recentTx.push({
-        date:ts?new Date(ts*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'',
-        type:isRef?'refund':isCB?'chargeback':'sale',
-        amount:amt,product:pname!==pid?pname:'',
-        customer:custName||(email?email.split('@')[0]:''),
-        country,affiliate:affName||affId||'',
+    if(recentTxOut.length<25){
+      recentTxOut.push({
+        date:c.ts?new Date(c.ts*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'',
+        type:c.isRef?'refund':c.isCB?'chargeback':'sale',
+        amount:c.amt,product:c.pname!==c.pid?c.pname:'',
+        customer:c.custName||(c.email?c.email.split('@')[0]:''),
+        country:c.country,affiliate:c.affName||c.affId||'',
       });
     }
 
-    bucketed.push({ts,isSale,amt});
+    bucketed.push({ts:c.ts,isSale:c.isSale,amt:c.amt});
   }
 
   const bucketRev=(min,max)=>bucketed
@@ -1158,9 +1187,95 @@ function aggregateJvzoo(all){
     last_sale_date:lastSaleDate,
     top_products:prods,
     affiliates:affs,
-    recent_transactions:recentTx,
+    recent_transactions:recentTxOut,
     _disputes_unavailable:true, /* JVZoo's /transactions API exposes no chargeback/dispute status — always 0 */
   };
+}
+
+async function apiFetchJvzooStats(creds,offerName){
+  try{
+    const fetchChunk=async(payload,attempts=4)=>{
+      for(let i=0;i<attempts;i++){
+        try{ return await callProxy(payload); }
+        catch(err){ if(i===attempts-1) throw err; await new Promise(r=>setTimeout(r,500*(i+1))); }
+      }
+    };
+
+    const prior=loadJvzSync(offerName);
+    let cum, recentTx;
+
+    if(prior){
+      /* Incremental — only fetch what's new since the last sync. */
+      cum=prior.cum;
+      recentTx=[...prior.recentTx];
+      const seenIds=new Set(recentTx.map(t=>String(t.transaction_id ?? `${t.sale_date}|${t.amount}`)));
+
+      const sinceDate=new Date(prior.lastSyncDate+'T00:00:00Z');
+      sinceDate.setUTCDate(sinceDate.getUTCDate()-1); /* 1-day overlap buffer, dedup handles the rest */
+      const customStart=sinceDate.toISOString().slice(0,10);
+      const customEnd=new Date(Date.now()+86400000).toISOString().slice(0,10);
+
+      let offset=0, guard=0, prevOffset=-1, retries=0;
+      while(guard++<50){
+        if(offset===prevOffset){
+          retries++;
+          if(retries>5) throw new Error(`JVZoo incremental sync: page ${offset} kept failing after repeated retries`);
+          await new Promise(r=>setTimeout(r,500*retries));
+        }else retries=0;
+        prevOffset=offset;
+        const payload={platform:'JVzoo',apiKey:creds.apiKey,username:creds.username||'',action:'fetchTxChunk',dateRange:'custom',customStart,customEnd,pageOffset:offset,pageLimit:15};
+        let d;
+        try{ d=await fetchChunk(payload); }catch{ continue; }
+        for(const t of (d.transactions||[])){
+          const key=String(t.transaction_id ?? `${t.sale_date}|${t.amount}`);
+          if(!seenIds.has(key)){ seenIds.add(key); recentTx.push(jvzTrim(t)); }
+        }
+        if(!d.meta || d.meta.next_offset===null || d.meta.next_offset===undefined) break;
+        offset=d.meta.next_offset;
+      }
+    }else{
+      /* First sync — full sequential history fetch (proven safe; parallelizing
+         this triggered timeouts/rate-limiting from JVZoo, so it stays
+         sequential and slow only this one time). */
+      const all=[];
+      let offset=0, guard=0, prevOffset=-1, retries=0;
+      while(guard++<300){
+        if(offset===prevOffset){
+          retries++;
+          if(retries>5) throw new Error(`JVZoo: page ${offset} kept failing after repeated retries — stopping rather than return incomplete data`);
+          await new Promise(r=>setTimeout(r,500*retries));
+        }else retries=0;
+        prevOffset=offset;
+        const payload={platform:'JVzoo',apiKey:creds.apiKey,username:creds.username||'',action:'fetchTxChunk',dateRange:'alltime',pageOffset:offset,pageLimit:15};
+        let d;
+        try{ d=await fetchChunk(payload); }catch{ continue; }
+        for(const t of (d.transactions||[])) all.push(jvzTrim(t));
+        if(!d.meta || d.meta.next_offset===null || d.meta.next_offset===undefined) break;
+        offset=d.meta.next_offset;
+      }
+      if(all.length===0) return{raw:null,err:'JVZoo returned 0 transactions. Check credentials.'};
+      cum=newJvzCum();
+      recentTx=all;
+    }
+
+    /* Fold anything that's aged out of the rolling window into the cumulative
+       baseline; keep the rest as raw transactions for bucket recomputation. */
+    const cutoffTs=Math.floor(Date.now()/1000)-JVZ_ROLLING_DAYS*86400;
+    const keep=[],ageOut=[];
+    for(const t of recentTx){
+      const c=jvzClassify(t);
+      (c.ts>=cutoffTs?keep:ageOut).push(t);
+    }
+    if(ageOut.length) cum=foldIntoJvzCum(cum,ageOut);
+    recentTx=keep;
+
+    const raw=aggregateJvzooCombined(cum,recentTx);
+    saveJvzSync(offerName,{lastSyncDate:new Date().toISOString().slice(0,10),cum,recentTx});
+    return{raw,counts:{total:cum.orders+cum.refunds+cum.cbs+recentTx.length}};
+  }catch(e){
+    console.error('[JVzoo] fetchStats error:',e.message);
+    return{raw:null,err:e.message};
+  }
 }
 
 /* ─── EXPLODELY — chunked fetch ──────────────────────────────────────────

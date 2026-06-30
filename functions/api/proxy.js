@@ -22,7 +22,7 @@ export async function onRequestPost({ request }) {
     let result;
     switch (platform) {
       case 'Explodely': result = await explodely(username, apiKey, action, body.startdate, body.enddate); break;
-      case 'JVzoo':     result = await jvzoo(username, apiKey, action, offerId, dateRange, pageOffset, pageLimit); break;
+      case 'JVzoo':     result = await jvzoo(username, apiKey, action, offerId, dateRange, pageOffset, pageLimit, body.customStart, body.customEnd); break;
       case 'Clickbank': result = await clickbank(apiKey, apiSecret, action, offerId); break;
       case 'Cartpanda': result = await cartpanda(apiKey, action, offerId); break;
       case 'Digistore': result = await digistore(apiKey, action, offerId); break;
@@ -130,12 +130,18 @@ async function explodely(username, apiKey, action, startdate, enddate) {
 /* ─── JVZOO ──────────────────────────────────────────────────────────────── */
 /* Auth: Basic — API Key as username, literal "x" as password (per JVZoo docs) */
 
-/* Compute start/end from dateRange param — all UTC */
-function jvzooComputeRange(dateRange) {
+/* Compute start/end from dateRange param — all UTC.
+   'custom' bypasses the presets entirely and uses customStart/customEnd as-is —
+   used for incremental sync (fetch only what's new since the last sync). */
+function jvzooComputeRange(dateRange, customStart, customEnd) {
   const now         = new Date();
   const isoD        = d => d.toISOString().slice(0, 10);
   const todayUTC    = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const tomorrowUTC = new Date(todayUTC.getTime() + 86400000);
+
+  if (dateRange === 'custom' && customStart && customEnd) {
+    return { rangeStart: customStart, rangeEnd: customEnd, rangeLabel: 'Custom' };
+  }
 
   let rangeStart, rangeEnd, rangeLabel;
   switch (dateRange) {
@@ -175,7 +181,7 @@ function jvzooComputeRange(dateRange) {
   return { rangeStart, rangeEnd, rangeLabel };
 }
 
-async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth', pageOffset = 0, pageLimit = 15) {
+async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth', pageOffset = 0, pageLimit = 15, customStart, customEnd) {
   const h = {
     Authorization: 'Basic ' + btoa(`${apiKey}:x`),
     Accept: 'application/json',
@@ -187,7 +193,7 @@ async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth',
      because large ranges (e.g. "Last Month" = 130+ pages) cannot be fetched in a
      single Worker invocation. */
   if (action === 'fetchTxChunk') {
-    const { rangeStart, rangeEnd, rangeLabel } = jvzooComputeRange(dateRange);
+    const { rangeStart, rangeEnd, rangeLabel } = jvzooComputeRange(dateRange, customStart, customEnd);
     pageOffset = Math.max(0, Number(pageOffset) || 0);
     pageLimit  = Math.min(Math.max(1, Number(pageLimit) || 15), 20);
 
