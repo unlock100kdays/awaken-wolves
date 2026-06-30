@@ -284,6 +284,8 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 .modal-check{display:flex;align-items:center;gap:6px;padding:6px 8px;background:rgba(255,255,255,.02);border-radius:3px;border:1px solid rgba(255,255,255,.04);cursor:pointer}
 .modal-check input{width:12px;height:12px;cursor:pointer;accent-color:var(--red)}
 .modal-check span{font-size:.72rem;color:var(--silver)}
+.modal-check-add{display:flex;gap:6px;margin-top:6px}
+.modal-check-add .form-input{flex:1;padding:7px 10px;font-size:.72rem}
 
 /* EXTENDED DATA BLOCKS (products, countries, recent txns) */
 .ex-block{border-top:1px solid rgba(100,0,0,.1);padding:8px 0 2px}
@@ -598,6 +600,10 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
         <label class="modal-check"><input type="checkbox" name="bc" value="Training Pages"/><span>Training Pages</span></label>
         <label class="modal-check"><input type="checkbox" name="bc" value="Freebie Page"/><span>Freebie Page</span></label>
         <label class="modal-check"><input type="checkbox" name="bc" value="High-Ticket Page"/><span>High-Ticket Page</span></label>
+      </div>
+      <div class="modal-check-add">
+        <input class="form-input" id="inp-checklist-new" placeholder="Custom checklist item…" onkeydown="if(event.key==='Enter'){event.preventDefault();addChecklistItem();}"/>
+        <button type="button" class="sub-add-btn" onclick="addChecklistItem()">+ Add</button>
       </div>
     </div>
     <div class="form-group"><label class="form-label">Operation Deadline</label><input class="form-input" id="inp-proj-deadline" type="date"/></div>
@@ -1419,8 +1425,24 @@ function openAddProject(col){
   ['inp-proj-name','inp-proj-pm','inp-proj-vsl'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('inp-proj-script').value='not-started';
   document.getElementById('inp-proj-deadline').value='';
+  document.getElementById('inp-checklist-new').value='';
+  document.querySelectorAll('#backend-checks .modal-check').forEach(l=>{if(!ALL_ITEMS.includes(l.querySelector('input').value))l.remove();});
   document.querySelectorAll('#backend-checks input').forEach(c=>c.checked=false);
   document.getElementById('modal-project').classList.add('open');
+}
+
+function addChecklistItem(){
+  const inp=document.getElementById('inp-checklist-new');
+  const name=inp.value.trim();
+  if(!name)return;
+  const existing=[...document.querySelectorAll('#backend-checks input')].map(c=>c.value.toLowerCase());
+  if(existing.includes(name.toLowerCase())){inp.value='';return;}
+  const label=document.createElement('label');
+  label.className='modal-check';
+  label.innerHTML=`<input type="checkbox" name="bc" value="${escHtml(name)}" checked/><span>${escHtml(name)}</span>`;
+  document.getElementById('backend-checks').appendChild(label);
+  inp.value='';
+  inp.focus();
 }
 
 function addProject(){
@@ -1430,8 +1452,8 @@ function addProject(){
   const vsl=document.getElementById('inp-proj-vsl').value.trim()||'—';
   const script=document.getElementById('inp-proj-script').value;
   const dl=document.getElementById('inp-proj-deadline').value;
-  const checked=[...document.querySelectorAll('#backend-checks input:checked')].map(c=>c.value);
-  const checklist={};ALL_ITEMS.forEach(it=>checklist[it]={done:checked.includes(it),notes:''});
+  const checklist={};
+  document.querySelectorAll('#backend-checks input').forEach(c=>{checklist[c.value]={done:c.checked,notes:''};});
   createProjectCardFromData({id:uid(),name,pm,vsl,script,deadline:dl,checklist},MC,false);
   closeModal('modal-project');
 }
@@ -1439,12 +1461,13 @@ function addProject(){
 function createProjectCardFromData(proj,col,fromRestore){
   const list=document.getElementById(`list-under-${col}`);
   const emp=list.querySelector('.empty-state');if(emp)emp.remove();
+  const items=Object.keys(proj.checklist||{});
   const done=Object.values(proj.checklist||{}).filter(v=>v.done).length;
-  const total=ALL_ITEMS.length;
+  const total=items.length||1;
   const pct=Math.round(done/total*100);
   const scriptLbl=proj.script==='done'?'Done':proj.script==='in-progress'?'In Progress':'Not Started';
   const dlLbl=proj.deadline?new Date(proj.deadline+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'—';
-  const checklistHTML=ALL_ITEMS.map(it=>{
+  const checklistHTML=items.map(it=>{
     const st=proj.checklist?.[it]||{done:false,notes:''};
     return`<div class="check-group" data-item="${it}">
       <div class="check-item${st.done?' checked':''}" onclick="toggleCheck(this)">
