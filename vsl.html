@@ -150,16 +150,6 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 /* JVZoo date-range selector */
 .dr-select{background:rgba(20,4,4,.9);border:1px solid rgba(150,0,0,.35);border-radius:4px;color:#d0d0d8;font-size:.62rem;letter-spacing:.06em;padding:3px 6px;cursor:pointer;font-family:inherit;outline:none}
 .dr-select:hover{border-color:rgba(204,17,0,.6)}
-/* JVZoo report table */
-.jvz-report{width:100%;border-collapse:collapse;font-size:.64rem;margin-bottom:4px}
-.jvz-report th{text-align:center;letter-spacing:.09em;text-transform:uppercase;color:rgba(160,160,175,.55);padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.06);white-space:nowrap;font-weight:600}
-.jvz-report td{text-align:center;padding:6px 6px;border-bottom:1px solid rgba(255,255,255,.03)}
-.jvz-report td:first-child{text-align:left;color:rgba(160,160,175,.5);font-size:.6rem;letter-spacing:.06em}
-.jvz-report .jv-val{font-size:.78rem;font-weight:700;color:#e0e0e0}
-.jvz-report .jv-green{color:#22dd66}
-.jvz-report .jv-red{color:#ee2200}
-.jvz-report .jv-orange{color:#ff8800}
-.jvz-na{color:rgba(130,130,145,.3)!important;font-size:.6rem!important}
 
 /* PROJECT CARD */
 .project-card{background:rgba(10,4,4,.92);border:1px solid rgba(100,0,0,.2);border-radius:6px;overflow:hidden;position:relative}
@@ -1230,36 +1220,29 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
     return;
   }
 
-  /* ── JVZoo: report-style summary table ── */
+  /* ── JVZoo: report-style stat boxes ── */
   const jvzReportHTML=isJVZ?(() => {
     const r=raw;
-    const fv=(v,cls='')=>`<span class="jv-val${cls?' jv-'+cls:''}">${v}</span>`;
     const refPct=Number(r.jvz_refund_pct||0);
     const refCl=refPct>10?'red':refPct>5?'orange':'green';
+    const refAmtPct=Number(r.jvz_refund_amt_pct||0);
+    const boxes=[
+      {l:'Sales',         v:(r.jvz_sales||0).toLocaleString(),                 cls:''},
+      {l:'Earnings',      v:fmt(r.jvz_earnings||0),                            cls:'green'},
+      {l:'Net Earnings',  v:fmt(r.jvz_net_earnings||0),                        cls:'green'},
+      {l:'ASV',           v:fmt(r.jvz_asv||0),                                 cls:'green'},
+      {l:'AOV',           v:fmt(r.jvz_aov||0),                                 cls:'green'},
+      {l:'Refund %',      v:refPct.toFixed(2)+'%',                             cls:refCl},
+      {l:'Refund Amt %',  v:refAmtPct.toFixed(2)+'%',                          cls:refCl},
+      {l:'Refunds',       v:(r.jvz_refunds||0).toLocaleString(),               cls:r.jvz_refunds?'red':''},
+      {l:'Refund $',      v:fmt(r.jvz_refund_dollars||0),                      cls:r.jvz_refund_dollars?'red':''},
+    ];
     return`<div class="ex-block">
       <div class="ex-title" style="display:flex;justify-content:space-between;align-items:center">
         <span>Report — ${escHtml(drLabels[dateRange]||dateRange)}</span>
         <span style="font-size:.6rem;color:rgba(150,150,165,.4)">${r.range_start||''} → ${r.range_end||''}</span>
       </div>
-      <div class="funnel-wrap"><table class="jvz-report">
-        <thead><tr>
-          <th></th><th>Sales</th><th>Earnings</th><th>Net Earnings</th>
-          <th>ASV</th><th>AOV</th><th>Refund%</th><th>Refund Amt%</th>
-          <th>Refunds</th><th>Refund $</th>
-        </tr></thead>
-        <tbody><tr>
-          <td>${escHtml(drLabels[dateRange]||dateRange)}</td>
-          <td>${fv((r.jvz_sales||0).toLocaleString())}</td>
-          <td>${fv(fmt(r.jvz_earnings||0),'green')}</td>
-          <td>${fv(fmt(r.jvz_net_earnings||0),'green')}</td>
-          <td>${fv(fmt(r.jvz_asv||0),'green')}</td>
-          <td>${fv(fmt(r.jvz_aov||0),'green')}</td>
-          <td>${fv((refPct).toFixed(2)+'%',refCl)}</td>
-          <td>${fv(Number(r.jvz_refund_amt_pct||0).toFixed(2)+'%',refCl)}</td>
-          <td>${fv((r.jvz_refunds||0).toLocaleString(),r.jvz_refunds?'red':'')}</td>
-          <td>${fv(fmt(r.jvz_refund_dollars||0),r.jvz_refund_dollars?'red':'')}</td>
-        </tr></tbody>
-      </table></div>
+      <div class="data-grid">${boxes.map(b=>`<div class="df-item"><span class="df-label">${escHtml(b.l)}</span><span class="df-value${b.cls?' '+b.cls:''}">${b.v}</span></div>`).join('')}</div>
     </div>`;
   })():'';
 
