@@ -416,10 +416,10 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 
     <!-- STATS -->
     <div class="vsl-stats">
-      <div class="vs-card"><span class="vs-icon">🎬</span><div class="vs-info"><span class="vs-val" id="stat-live">0</span><span class="vs-label">Live Operations</span></div></div>
-      <div class="vs-card"><span class="vs-icon">⚙️</span><div class="vs-info"><span class="vs-val" id="stat-under">0</span><span class="vs-label">Undergoing Ops</span></div></div>
-      <div class="vs-card"><span class="vs-icon">🩸</span><div class="vs-info"><span class="vs-val" id="stat-complete">—</span><span class="vs-label">Avg Completion</span></div></div>
-      <div class="vs-card"><span class="vs-icon">💰</span><div class="vs-info"><span class="vs-val" id="stat-alltime">$0</span><span class="vs-label">All-Time Revenue</span></div></div>
+      <div class="vs-card" id="node-stat-live"><span class="vs-icon">🎬</span><div class="vs-info"><span class="vs-val" id="stat-live">0</span><span class="vs-label">Live Operations</span></div></div>
+      <div class="vs-card" id="node-stat-under"><span class="vs-icon">⚙️</span><div class="vs-info"><span class="vs-val" id="stat-under">0</span><span class="vs-label">Undergoing Ops</span></div></div>
+      <div class="vs-card" id="node-stat-complete"><span class="vs-icon">🩸</span><div class="vs-info"><span class="vs-val" id="stat-complete">—</span><span class="vs-label">Avg Completion</span></div></div>
+      <div class="vs-card" id="node-stat-alltime"><span class="vs-icon">💰</span><div class="vs-info"><span class="vs-val" id="stat-alltime">$0</span><span class="vs-label">All-Time Revenue</span></div></div>
     </div>
 
     <!-- OPS GRID -->
@@ -1560,13 +1560,32 @@ function drawVeins(){
   const cont=document.getElementById('vsl-content');
   svg.setAttribute('width',cont.offsetWidth);svg.setAttribute('height',Math.max(cont.scrollHeight,cont.offsetHeight));
   svg.innerHTML=`<defs><filter id="vg" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="vg2" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
-  const pairs=[['node-root','node-bizops'],['node-root','node-nutra'],['node-bizops','node-live-bizops'],['node-bizops','node-under-bizops'],['node-nutra','node-live-nutra'],['node-nutra','node-under-nutra']];
-  const cols={'node-root,node-bizops':'#cc1100','node-root,node-nutra':'#008844','node-bizops,node-live-bizops':'#880000','node-bizops,node-under-bizops':'#882200','node-nutra,node-live-nutra':'#006633','node-nutra,node-under-nutra':'#005522'};
+  const pairs=[
+    ['node-root','node-stat-live'],['node-stat-live','node-stat-under'],['node-stat-under','node-bizops'],
+    ['node-root','node-stat-complete'],['node-stat-complete','node-stat-alltime'],['node-stat-alltime','node-nutra'],
+    ['node-bizops','node-live-bizops'],['node-bizops','node-under-bizops'],
+    ['node-nutra','node-live-nutra'],['node-nutra','node-under-nutra'],
+  ];
+  const cols={
+    'node-root,node-stat-live':'#cc1100','node-stat-live,node-stat-under':'#cc1100','node-stat-under,node-bizops':'#cc1100',
+    'node-root,node-stat-complete':'#008844','node-stat-complete,node-stat-alltime':'#008844','node-stat-alltime,node-nutra':'#008844',
+    'node-bizops,node-live-bizops':'#880000','node-bizops,node-under-bizops':'#882200',
+    'node-nutra,node-live-nutra':'#006633','node-nutra,node-under-nutra':'#005522',
+  };
   pairs.forEach(([a,b])=>{
     const ae=document.getElementById(a),be=document.getElementById(b);if(!ae||!be)return;
     const ar=getRC(ae),br=getRC(be);const col=cols[a+','+b]||'#8b0000';
-    const x1=ar.cx,y1=ar.bot-4,x2=br.cx,y2=br.top+4;const mid=(y1+y2)/2;
-    const d=`M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`;
+    const dx=br.cx-ar.cx,dy=br.cy-ar.cy;
+    let x1,y1,x2,y2,d;
+    if(Math.abs(dy)>=Math.abs(dx)){
+      if(dy>=0){x1=ar.cx;y1=ar.bot-4;x2=br.cx;y2=br.top+4;}else{x1=ar.cx;y1=ar.top+4;x2=br.cx;y2=br.bot-4;}
+      const mid=(y1+y2)/2;
+      d=`M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`;
+    }else{
+      if(dx>=0){x1=ar.cx+ar.w/2-4;y1=ar.cy;x2=br.cx-br.w/2+4;y2=br.cy;}else{x1=ar.cx-ar.w/2+4;y1=ar.cy;x2=br.cx+br.w/2-4;y2=br.cy;}
+      const mid=(x1+x2)/2;
+      d=`M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`;
+    }
     const len=Math.hypot(x2-x1,y2-y1)*1.5;
     [[col,'#200000',3,'0.8',''],['','',0,'',''],].slice(0,1).forEach(()=>{
       const base=mkPath(d);base.setAttribute('stroke','#200000');base.setAttribute('stroke-width','3');base.setAttribute('opacity','0.8');svg.appendChild(base);
