@@ -1199,7 +1199,7 @@ function statCls(spec,v){
   return c;
 }
 
-function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,staleErr,dateRange){
+function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,staleErr,dateRange,alltimeRevenue){
   dateRange=dateRange||'thismonth';
   const list=document.getElementById(`list-live-${col}`);
   const emp=list.querySelector('.empty-state');if(emp)emp.remove();
@@ -1212,6 +1212,7 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
   card.dataset.offerid=offerId||'';
   card.dataset.blob=JSON.stringify(raw||null);
   card.dataset.daterange=dateRange;
+  if(alltimeRevenue!=null)card.dataset.alltimeRevenue=String(alltimeRevenue);
 
   const pclr=(PCFG[platform]||{color:'#8a96a3'}).color;
   const platBadge=platform?`<span class="plat-badge" style="color:${pclr}">${escHtml(platform)}</span>`:'';
@@ -1240,6 +1241,7 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
         </div>
       </div>`;
     list.appendChild(card);
+    if(card.dataset.alltimeRevenue===undefined)fetchCardAllTimeRevenue(card);
     if(!fromRestore){updateStats();saveState();}
     return;
   }
@@ -1367,7 +1369,21 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
       <button class="refresh-btn" onclick="refreshOffer('${cid}')">🔄 Refresh Data</button>
     </div>`;
   list.appendChild(card);
+  if(card.dataset.alltimeRevenue===undefined)fetchCardAllTimeRevenue(card);
   if(!fromRestore){updateStats();saveState();}
+}
+
+async function fetchCardAllTimeRevenue(cardEl){
+  const platform=cardEl.dataset.platform,offerId=cardEl.dataset.offerid,name=cardEl.dataset.name;
+  const creds=getCredFor(platform);
+  if(!creds)return;
+  try{
+    const res=await apiFetchStats(platform,creds,offerId||'',name,'alltime');
+    if(res.raw && document.body.contains(cardEl)){
+      cardEl.dataset.alltimeRevenue=String(Number(res.raw.total_revenue)||0);
+      updateStats();
+    }
+  }catch(e){console.error(`[${platform}] all-time revenue fetch error:`,e.message);}
 }
 
 function toggleCard(header,bodyClass){
@@ -1410,8 +1426,9 @@ async function refreshOffer(cardId){
 
   const col=card.closest('[id^="list-live-"]').id.replace('list-live-','');
   const cardId2=card.dataset.id;
+  const alltimeRevenue=card.dataset.alltimeRevenue;
   card.remove();
-  createOfferCard(name,platform,raw,col,cardId2,offerId,true,apiErr,staleErr,dateRange);
+  createOfferCard(name,platform,raw,col,cardId2,offerId,true,apiErr,staleErr,dateRange,alltimeRevenue);
   saveState();updateStats();scheduleVeins();
 }
 
@@ -1554,10 +1571,7 @@ function updateStats(){
   document.getElementById('stat-under').textContent=under;
   let totalAllTime=0;
   document.querySelectorAll('.offer-card').forEach(card=>{
-    let raw=null; try{raw=JSON.parse(card.dataset.blob||'null');}catch{}
-    if(!raw) return;
-    if(card.dataset.platform==='JVzoo' && card.dataset.daterange!=='alltime') return;
-    totalAllTime+=Number(raw.total_revenue)||0;
+    totalAllTime+=Number(card.dataset.alltimeRevenue)||0;
   });
   document.getElementById('stat-alltime').textContent=totalAllTime>0?fmt(totalAllTime):'$0';
   const fills=[...document.querySelectorAll('.pc-progress-fill')];
