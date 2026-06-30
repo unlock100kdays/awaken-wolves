@@ -1008,55 +1008,33 @@ async function apiFetchStats(plat,creds,offerId,offerName,dateRange){
 /* JVZoo — chunked fetch, all-time: like Explodely, pull the account's full
    history in one go (no date-range picker) and compute every period
    (today/yesterday/7d/30d/all-time) from that single dataset client-side.
-   Each chunk covers a fixed 15-page window, so once the first chunk reveals
-   the account's total page count, every subsequent chunk's offset is known
-   up front (15, 30, 45, ...) — fetch those in parallel batches instead of
-   waiting on each one sequentially (was ~9min for 48 chunks one-at-a-time). */
+   Large ranges (e.g. one year can be 130+ pages) exceed Cloudflare's per-request
+   subrequest cap, so we call the proxy repeatedly with increasing pageOffset. */
 async function apiFetchJvzooStats(creds){
   try{
-    const seen=new Set();
     const all=[];
-    const PAGE_LIMIT=15, CONC=5;
-
-    const fetchChunk=async(offset,attempts=4)=>{
-      const payload={platform:'JVzoo',apiKey:creds.apiKey,username:creds.username||'',action:'fetchTxChunk',dateRange:'alltime',pageOffset:offset,pageLimit:PAGE_LIMIT};
-      for(let i=0;i<attempts;i++){
-        try{ return await callProxy(payload); }
-        catch(err){
-          if(i===attempts-1) throw err;
-          await new Promise(r=>setTimeout(r,500*(i+1)));
-        }
+    const seen=new Set();
+    let offset=0, guard=0, prevOffset=-1, sameOffsetRetries=0;
+    while(guard++<300){ /* hard safety cap: 300 chunks × 15 pages = 4500 pages max */
+      if(offset===prevOffset){
+        sameOffsetRetries++;
+        if(sameOffsetRetries>5) throw new Error(`JVZoo: page ${offset} kept failing after repeated retries — stopping rather than return incomplete data`);
+        await new Promise(r=>setTimeout(r,500*sameOffsetRetries));
+      }else{
+        sameOffsetRetries=0;
       }
-    };
-    const addTx=(txs)=>{
-      for(const t of txs){
+      prevOffset=offset;
+      const payload={platform:'JVzoo',apiKey:creds.apiKey,username:creds.username||'',action:'fetchTxChunk',dateRange:'alltime',pageOffset:offset,pageLimit:15};
+      let d;
+      try{ d=await callProxy(payload); }
+      catch{ continue; } /* counted via sameOffsetRetries above since offset is unchanged */
+      for(const t of (d.transactions||[])){
         const key=String(t.transaction_id ?? `${t.sale_date}|${t.amount}`);
         if(!seen.has(key)){seen.add(key);all.push(t);}
       }
-    };
-
-    const first=await fetchChunk(0);
-    addTx(first.transactions||[]);
-    const lastPage=first.meta?.last_page;
-
-    if(lastPage!=null && first.meta?.next_offset!=null){
-      const offsets=[];
-      for(let o=PAGE_LIMIT;o<=lastPage;o+=PAGE_LIMIT) offsets.push(o);
-
-      const failedOffsets=[];
-      for(let i=0;i<offsets.length;i+=CONC){
-        const batch=offsets.slice(i,i+CONC);
-        const results=await Promise.allSettled(batch.map(o=>fetchChunk(o)));
-        results.forEach((res,idx)=>{
-          if(res.status==='fulfilled') addTx(res.value.transactions||[]);
-          else failedOffsets.push(batch[idx]);
-        });
-      }
-      if(failedOffsets.length>0){
-        throw new Error(`JVZoo: ${failedOffsets.length} chunk(s) failed after retries (offsets: ${failedOffsets.slice(0,5).join(',')}${failedOffsets.length>5?'…':''}) — stopping rather than return incomplete data`);
-      }
+      if(!d.meta || d.meta.next_offset===null || d.meta.next_offset===undefined) break;
+      offset=d.meta.next_offset;
     }
-
     if(all.length===0) return{raw:null,err:'JVZoo returned 0 transactions. Check credentials.'};
     const raw=aggregateJvzoo(all);
     return{raw,counts:{total:all.length}};
