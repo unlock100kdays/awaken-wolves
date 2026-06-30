@@ -73,12 +73,30 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 .run-pill::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--red);animation:pulse 1.5s infinite}
 
 /* STATS */
-.vsl-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;position:relative;z-index:1;margin-bottom:20px}
-.vs-card{background:rgba(8,8,13,.7);border:1px solid var(--border);border-radius:6px;padding:14px 18px;display:flex;align-items:center;gap:12px}
-.vs-icon{font-size:1.3rem;flex-shrink:0}
-.vs-info{display:flex;flex-direction:column;gap:2px}
-.vs-val{font-size:1.2rem;font-weight:700;color:#e8e8e8}
-.vs-label{font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--silver)}
+.vsl-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;position:relative;z-index:1;margin-bottom:20px}
+.vs-card{
+  position:relative;overflow:hidden;
+  background:linear-gradient(165deg,rgba(24,4,4,.9),rgba(6,6,10,.95) 60%);
+  border:1px solid rgba(180,0,0,.22);border-radius:7px;
+  padding:15px 18px;display:flex;align-items:center;gap:13px;
+  box-shadow:0 10px 26px rgba(0,0,0,.45),inset 0 0 0 1px rgba(0,0,0,.3);
+  transition:border-color .2s,box-shadow .2s,transform .2s;
+}
+.vs-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--blood) 15%,var(--red) 50%,var(--ember) 65%,transparent 95%);
+  box-shadow:0 0 12px 1px rgba(204,17,0,.75);
+}
+.vs-card::after{
+  content:'';position:absolute;bottom:-36px;right:-24px;width:100px;height:100px;
+  background:radial-gradient(circle,rgba(139,0,0,.4),transparent 72%);
+  filter:blur(4px);pointer-events:none;
+}
+.vs-card:hover{border-color:rgba(204,17,0,.5);box-shadow:0 10px 26px rgba(139,0,0,.3),inset 0 0 0 1px rgba(0,0,0,.3);transform:translateY(-1px)}
+.vs-icon{font-size:1.45rem;flex-shrink:0;filter:drop-shadow(0 0 7px rgba(204,17,0,.55));position:relative;z-index:1}
+.vs-info{display:flex;flex-direction:column;gap:2px;position:relative;z-index:1}
+.vs-val{font-size:1.3rem;font-weight:800;color:#f2f2f2;text-shadow:0 0 14px rgba(204,17,0,.3)}
+.vs-label{font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--silver);opacity:.8}
 
 /* OPS GRID */
 .ops-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;position:relative;z-index:1;margin-bottom:20px;align-items:start}
@@ -399,10 +417,9 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
     <!-- STATS -->
     <div class="vsl-stats">
       <div class="vs-card"><span class="vs-icon">🎬</span><div class="vs-info"><span class="vs-val" id="stat-live">0</span><span class="vs-label">Live Operations</span></div></div>
-      <div class="vs-card"><span class="vs-icon">💰</span><div class="vs-info"><span class="vs-val" id="stat-alltime">$0</span><span class="vs-label">All-Time Revenue</span></div></div>
-      <div class="vs-card"><span class="vs-icon">📈</span><div class="vs-info"><span class="vs-val" id="stat-rev">$0</span><span class="vs-label">Revenue Today</span></div></div>
       <div class="vs-card"><span class="vs-icon">⚙️</span><div class="vs-info"><span class="vs-val" id="stat-under">0</span><span class="vs-label">Undergoing Ops</span></div></div>
       <div class="vs-card"><span class="vs-icon">🩸</span><div class="vs-info"><span class="vs-val" id="stat-complete">—</span><span class="vs-label">Avg Completion</span></div></div>
+      <div class="vs-card"><span class="vs-icon">💰</span><div class="vs-info"><span class="vs-val" id="stat-alltime">$0</span><span class="vs-label">All-Time Revenue</span></div></div>
     </div>
 
     <!-- OPS GRID -->
@@ -1512,10 +1529,13 @@ function updateStats(){
   const under=document.querySelectorAll('.project-card').length;
   document.getElementById('stat-live').textContent=live;
   document.getElementById('stat-under').textContent=under;
-  let totalRev=0,totalAllTime=0;
-  document.querySelectorAll('[data-today="1"]').forEach(v=>{totalRev+=parseFloat(v.textContent.replace(/[$,]/g,''))||0;});
-  document.querySelectorAll('[data-alltime="1"]').forEach(v=>{totalAllTime+=parseFloat(v.textContent.replace(/[$,]/g,''))||0;});
-  document.getElementById('stat-rev').textContent=totalRev>0?fmt(totalRev):'$0';
+  let totalAllTime=0;
+  document.querySelectorAll('.offer-card').forEach(card=>{
+    let raw=null; try{raw=JSON.parse(card.dataset.blob||'null');}catch{}
+    if(!raw) return;
+    if(card.dataset.platform==='JVzoo' && card.dataset.daterange!=='alltime') return;
+    totalAllTime+=Number(raw.total_revenue)||0;
+  });
   document.getElementById('stat-alltime').textContent=totalAllTime>0?fmt(totalAllTime):'$0';
   const fills=[...document.querySelectorAll('.pc-progress-fill')];
   if(fills.length){const avg=Math.round(fills.reduce((s,f)=>s+parseFloat(f.style.width||0),0)/fills.length);document.getElementById('stat-complete').textContent=avg+'%';}
