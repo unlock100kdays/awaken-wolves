@@ -1259,9 +1259,17 @@ async function apiFetchExplodelyStats(creds){
 }
 
 function aggregateExplodely(all){
+  /* Explodely's own dashboard buckets "today"/"yesterday" by Hawaii time
+     (UTC-10), not UTC — confirmed by testing this account's live data
+     against every UTC offset and finding UTC-10 the only one that lines
+     up with their reported "Yesterday" figure. Using true UTC midnight
+     here was pulling in ~5-10 extra evening-UTC sales that Explodely
+     itself still counts as "today", overstating Yesterday/Today revenue. */
+  const HST_OFFSET_SEC=-10*3600;
   const utcMidnight=(daysBack)=>{
-    const d=new Date();d.setUTCHours(0,0,0,0);
-    return Math.floor(d.getTime()/1000)-daysBack*86400;
+    const d=new Date(Date.now()+HST_OFFSET_SEC*1000);
+    d.setUTCHours(0,0,0,0);
+    return Math.floor(d.getTime()/1000)-daysBack*86400-HST_OFFSET_SEC;
   };
   const midToday=utcMidnight(0),midYest=utcMidnight(1),mid7=utcMidnight(7),mid30=utcMidnight(30);
 
