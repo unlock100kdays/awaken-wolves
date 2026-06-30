@@ -1233,12 +1233,9 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
   /* ── JVZoo: report-style summary table ── */
   const jvzReportHTML=isJVZ?(() => {
     const r=raw;
-    const na='<span class="jvz-na">—</span>';
     const fv=(v,cls='')=>`<span class="jv-val${cls?' jv-'+cls:''}">${v}</span>`;
     const refPct=Number(r.jvz_refund_pct||0);
-    const dispPct=Number(r.jvz_disputes_pct||0);
     const refCl=refPct>10?'red':refPct>5?'orange':'green';
-    const dispCl=dispPct>1?'red':dispPct>0.3?'orange':'green';
     return`<div class="ex-block">
       <div class="ex-title" style="display:flex;justify-content:space-between;align-items:center">
         <span>Report — ${escHtml(drLabels[dateRange]||dateRange)}</span>
@@ -1248,7 +1245,7 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
         <thead><tr>
           <th></th><th>Sales</th><th>Earnings</th><th>Net Earnings</th>
           <th>ASV</th><th>AOV</th><th>Refund%</th><th>Refund Amt%</th>
-          <th>Refunds</th><th>Refund $</th><th>Disputes*</th><th>Disputes $*</th><th>Disputes%*</th>
+          <th>Refunds</th><th>Refund $</th>
         </tr></thead>
         <tbody><tr>
           <td>${escHtml(drLabels[dateRange]||dateRange)}</td>
@@ -1261,12 +1258,8 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
           <td>${fv(Number(r.jvz_refund_amt_pct||0).toFixed(2)+'%',refCl)}</td>
           <td>${fv((r.jvz_refunds||0).toLocaleString(),r.jvz_refunds?'red':'')}</td>
           <td>${fv(fmt(r.jvz_refund_dollars||0),r.jvz_refund_dollars?'red':'')}</td>
-          <td>${na}</td>
-          <td>${na}</td>
-          <td>${na}</td>
         </tr></tbody>
       </table></div>
-      <div style="font-size:.58rem;color:rgba(150,150,165,.45);padding:4px 2px 0">*JVZoo's transaction API does not expose dispute/chargeback data — not retrievable</div>
     </div>`;
   })():'';
 
