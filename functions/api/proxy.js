@@ -17,12 +17,12 @@ export async function onRequestOptions() {
 export async function onRequestPost({ request }) {
   try {
     const body = await request.json();
-    const { platform, apiKey, apiSecret, username, action, offerId, dateRange } = body;
+    const { platform, apiKey, apiSecret, username, action, offerId, dateRange, pageOffset, pageLimit } = body;
     if (!platform || !apiKey) return json({ success: false, error: 'Missing platform or apiKey' }, 400);
     let result;
     switch (platform) {
       case 'Explodely': result = await explodely(username, apiKey, action); break;
-      case 'JVzoo':     result = await jvzoo(username, apiKey, action, offerId, dateRange); break;
+      case 'JVzoo':     result = await jvzoo(username, apiKey, action, offerId, dateRange, pageOffset, pageLimit); break;
       case 'Clickbank': result = await clickbank(apiKey, apiSecret, action, offerId); break;
       case 'Cartpanda': result = await cartpanda(apiKey, action, offerId); break;
       case 'Digistore': result = await digistore(apiKey, action, offerId); break;
@@ -353,51 +353,140 @@ async function explodely(username, apiKey, action) {
 
 /* ─── JVZOO ──────────────────────────────────────────────────────────────── */
 /* Auth: Basic — API Key as username, literal "x" as password (per JVZoo docs) */
-async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth') {
+
+/* Compute start/end from dateRange param — all UTC */
+function jvzooComputeRange(dateRange) {
+  const now         = new Date();
+  const isoD        = d => d.toISOString().slice(0, 10);
+  const todayUTC    = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const tomorrowUTC = new Date(todayUTC.getTime() + 86400000);
+
+  let rangeStart, rangeEnd, rangeLabel;
+  switch (dateRange) {
+    case 'today':
+      rangeStart  = isoD(todayUTC);
+      rangeEnd    = isoD(tomorrowUTC);
+      rangeLabel  = 'Today';
+      break;
+    case 'yesterday':
+      rangeStart  = isoD(new Date(todayUTC.getTime() - 86400000));
+      rangeEnd    = isoD(todayUTC);
+      rangeLabel  = 'Yesterday';
+      break;
+    case 'last7':
+      rangeStart  = isoD(new Date(todayUTC.getTime() - 6 * 86400000));
+      rangeEnd    = isoD(tomorrowUTC);
+      rangeLabel  = 'Last 7 Days';
+      break;
+    case 'lastmonth': {
+      const lmS   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+      const lmE   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      rangeStart  = isoD(lmS);
+      rangeEnd    = isoD(lmE);
+      rangeLabel  = 'Last Month';
+      break;
+    }
+    case 'alltime':
+      rangeStart  = '2015-01-01';
+      rangeEnd    = isoD(tomorrowUTC);
+      rangeLabel  = 'All Time';
+      break;
+    default: /* thismonth */
+      rangeStart  = isoD(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)));
+      rangeEnd    = isoD(tomorrowUTC);
+      rangeLabel  = 'This Month';
+  }
+  return { rangeStart, rangeEnd, rangeLabel };
+}
+
+async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth', pageOffset = 0, pageLimit = 15) {
   const h = {
     Authorization: 'Basic ' + btoa(`${apiKey}:x`),
     Accept: 'application/json',
   };
 
-  if (action === 'fetchStats') {
-    /* Compute start/end from dateRange param — all UTC */
-    const now         = new Date();
-    const isoD        = d => d.toISOString().slice(0, 10);
-    const todayUTC    = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const tomorrowUTC = new Date(todayUTC.getTime() + 86400000);
+  /* Chunked raw-transaction fetch — bounded to stay under Cloudflare's per-request
+     subrequest cap. The frontend calls this repeatedly with increasing pageOffset
+     and aggregates the accumulated transactions client-side. This is required
+     because large ranges (e.g. "Last Month" = 130+ pages) cannot be fetched in a
+     single Worker invocation. */
+  if (action === 'fetchTxChunk') {
+    const { rangeStart, rangeEnd, rangeLabel } = jvzooComputeRange(dateRange);
+    pageOffset = Math.max(0, Number(pageOffset) || 0);
+    pageLimit  = Math.min(Math.max(1, Number(pageLimit) || 15), 20);
 
-    let rangeStart, rangeEnd, rangeLabel;
-    switch (dateRange) {
-      case 'today':
-        rangeStart  = isoD(todayUTC);
-        rangeEnd    = isoD(tomorrowUTC);
-        rangeLabel  = 'Today';
-        break;
-      case 'yesterday':
-        rangeStart  = isoD(new Date(todayUTC.getTime() - 86400000));
-        rangeEnd    = isoD(todayUTC);
-        rangeLabel  = 'Yesterday';
-        break;
-      case 'last7':
-        rangeStart  = isoD(new Date(todayUTC.getTime() - 6 * 86400000));
-        rangeEnd    = isoD(tomorrowUTC);
-        rangeLabel  = 'Last 7 Days';
-        break;
-      case 'lastmonth': {
-        const lmS   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
-        const lmE   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-        rangeStart  = isoD(lmS);
-        rangeEnd    = isoD(lmE);
-        rangeLabel  = 'Last Month';
-        break;
+    const all  = [];
+    const seen = new Set();
+
+    const fetchPage = async (pageIdx, retries = 2) => {
+      try {
+        const q = new URLSearchParams({ start_date: rangeStart, end_date: rangeEnd, page_index: String(pageIdx) });
+        const r = await fetch(`https://api.jvzoo.com/v3.0/transactions?${q}`, { headers: h });
+        if (!r.ok) {
+          if (retries > 0) { await new Promise(res => setTimeout(res, 400)); return fetchPage(pageIdx, retries - 1); }
+          return null;
+        }
+        const d = await r.json().catch(() => null);
+        if (!d) return null;
+        const tx       = Array.isArray(d?.results) ? d.results : [];
+        const pag      = d?.meta?.pagination ?? {};
+        const hasMore  = pag.has_more ?? false;
+        const total    = d?.meta?.total_count ?? null;
+        const pageSize = pag.page_size ?? 50;
+        const lastPage = total !== null ? Math.ceil(total / pageSize) - 1 : null;
+        return { tx, hasMore, lastPage, total };
+      } catch (e) {
+        if (retries > 0) { await new Promise(res => setTimeout(res, 400)); return fetchPage(pageIdx, retries - 1); }
+        return null;
       }
-      default: /* thismonth */
-        rangeStart  = isoD(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)));
-        rangeEnd    = isoD(tomorrowUTC);
-        rangeLabel  = 'This Month';
+    };
+
+    const addTx = (txList) => {
+      for (const t of txList) {
+        const key = String(t.transaction_id ?? `${t.sale_date}|${t.amount}`);
+        if (!seen.has(key)) { seen.add(key); all.push(t); }
+      }
+    };
+
+    const first = await fetchPage(pageOffset);
+    let lastPage = null, totalCount = null;
+    if (first) { addTx(first.tx); lastPage = first.lastPage; totalCount = first.total; }
+
+    const endPage = lastPage !== null ? Math.min(pageOffset + pageLimit - 1, lastPage) : pageOffset;
+
+    if (first?.hasMore && endPage > pageOffset) {
+      const CONC = 3;
+      for (let p = pageOffset + 1; p <= endPage; p += CONC) {
+        const batch = [];
+        for (let pp = p; pp <= Math.min(p + CONC - 1, endPage); pp++) batch.push(pp);
+        const results = await Promise.allSettled(batch.map(pp => fetchPage(pp)));
+        for (const res of results) {
+          const v = res.status === 'fulfilled' ? res.value : null;
+          if (v) addTx(v.tx);
+        }
+      }
     }
 
-    /* Single-range paginated fetch — no monthly chunks needed */
+    const nextOffset = (lastPage !== null && endPage < lastPage) ? endPage + 1 : null;
+
+    return {
+      success: true,
+      transactions: all,
+      meta: {
+        total_count: totalCount,
+        last_page:   lastPage,
+        next_offset: nextOffset,
+        range_start: rangeStart,
+        range_end:   rangeEnd,
+        range_label: rangeLabel,
+      },
+    };
+  }
+
+  if (action === 'fetchStats') {
+    const { rangeStart, rangeEnd, rangeLabel } = jvzooComputeRange(dateRange);
+
+    /* Single-range paginated fetch — used only as a fallback / small ranges */
     const all  = [];
     const seen = new Set();
 
@@ -435,7 +524,7 @@ async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth')
     if (first) addTx(first.tx);
 
     if (first?.hasMore) {
-      const MAX   = first.lastPage ?? 500;
+      const MAX   = Math.min(first.lastPage ?? 45, 45); /* stay under subrequest cap */
       const CONC  = 2;
       for (let p = 1; p <= MAX; p += CONC) {
         const batch = [];

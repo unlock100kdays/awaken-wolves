@@ -900,6 +900,7 @@ async function apiFetchOffers(plat,creds){
 }
 
 async function apiFetchStats(plat,creds,offerId,offerName,dateRange){
+  if(plat==='JVzoo') return apiFetchJvzooStats(creds,dateRange);
   try{
     const payload={platform:plat,apiKey:creds.apiKey,apiSecret:creds.apiSecret||'',username:creds.username||'',action:'fetchStats',offerId};
     if(dateRange)payload.dateRange=dateRange;
@@ -909,6 +910,151 @@ async function apiFetchStats(plat,creds,offerId,offerName,dateRange){
     console.error(`[${plat}] fetchStats error:`,e.message);
     return{raw:null,err:e.message};
   }
+}
+
+/* JVZoo — chunked fetch: large ranges (Last Month = 130+ pages) exceed Cloudflare's
+   per-request subrequest cap, so we call the proxy repeatedly with increasing
+   pageOffset, accumulate raw transactions client-side, then aggregate here. */
+async function apiFetchJvzooStats(creds,dateRange){
+  try{
+    const all=[];
+    const seen=new Set();
+    let offset=0, rangeMeta=null, guard=0;
+    while(guard++<60){ /* hard safety cap: 60 chunks × 15 pages = 900 pages max */
+      const payload={platform:'JVzoo',apiKey:creds.apiKey,username:creds.username||'',action:'fetchTxChunk',dateRange,pageOffset:offset,pageLimit:15};
+      const d=await callProxy(payload);
+      for(const t of (d.transactions||[])){
+        const key=String(t.transaction_id ?? `${t.sale_date}|${t.amount}`);
+        if(!seen.has(key)){seen.add(key);all.push(t);}
+      }
+      rangeMeta=d.meta||rangeMeta;
+      if(!d.meta || d.meta.next_offset===null || d.meta.next_offset===undefined) break;
+      offset=d.meta.next_offset;
+    }
+    const raw=aggregateJvzoo(all,rangeMeta,dateRange);
+    return{raw,counts:{total:all.length}};
+  }catch(e){
+    console.error('[JVzoo] fetchStats error:',e.message);
+    return{raw:null,err:e.message};
+  }
+}
+
+/* Mirrors the aggregation logic in functions/api/proxy.js (action:'fetchStats').
+   JVZoo's Report Center only counts refunds/disputes of THIS period's sales — the
+   API returns refunds PROCESSED in-range regardless of original sale date, so we
+   filter those out by sale_date before counting. */
+function aggregateJvzoo(all,rangeMeta,dateRange){
+  const rangeStart=rangeMeta?.range_start, rangeEnd=rangeMeta?.range_end;
+  const rangeSt=rangeStart?new Date(rangeStart):null;
+  const rangeEn=rangeEnd?new Date(rangeEnd):null;
+
+  let netKept=0,sellerGross=0,refundAmt=0,cbAmt=0,totalFees=0;
+  let orders=0,refunds=0,cbs=0,lastSaleTs=0;
+  const emails=new Set();
+  const prodMap={},affMap={};
+  const recentTx=[];
+
+  const sorted=[...all].sort((a,b)=>new Date(b.sale_date||0)-new Date(a.sale_date||0));
+
+  for(const tx of sorted){
+    const amt=parseFloat(tx.amount??0)||0;
+    const jvzFee=parseFloat(tx.payouts?.jvzoo_fee??0)||0;
+    const sellerNet=parseFloat(tx.payouts?.seller_earnings??0)||0;
+    const status=String(tx.status??'').toUpperCase();
+    const isRef=status.includes('REFUND');
+    const isCB=status.includes('CHARG')||status.includes('DISPUT')||status.includes('CGBK');
+    const isSale=!isRef&&!isCB;
+
+    let txDate=null;
+    if(tx.sale_date){const d=new Date(tx.sale_date);if(!isNaN(d))txDate=d;}
+    const inPeriod=!txDate||!rangeSt||!rangeEn||(txDate>=rangeSt&&txDate<rangeEn);
+    const ts=txDate?Math.floor(txDate.getTime()/1000):0;
+
+    const cust=tx.customer??{};
+    const email=(cust.email??'').toLowerCase();
+    const custName=[cust.first_name,cust.last_name].filter(Boolean).join(' ');
+    const country=cust.country??'';
+    const pid=String(tx.product_id??'_unk');
+    const pname=tx.product_name??pid;
+    const aff=tx.affiliate??{};
+    const affId=String(aff.id??'');
+    const affName=aff.display_name??'';
+
+    if(email)emails.add(email);
+
+    if(isSale){
+      netKept+=amt;sellerGross+=sellerNet;orders++;totalFees+=jvzFee;
+      if(ts>lastSaleTs)lastSaleTs=ts;
+    }else if(isRef&&inPeriod){refundAmt+=amt;refunds++;}
+      else if(isCB&&inPeriod){cbAmt+=amt;cbs++;}
+
+    if(!prodMap[pid])prodMap[pid]={id:pid,name:pname,revenue:0,orders:0,refunds:0,chargebacks:0};
+    const p=prodMap[pid];
+    if(isRef&&inPeriod){p.revenue-=amt;p.refunds++;}
+    else if(isCB&&inPeriod){p.revenue-=amt;p.chargebacks++;}
+    else if(isSale){p.revenue+=amt;p.orders++;}
+
+    if(affId){
+      if(!affMap[affId])affMap[affId]={id:affId,name:affName||affId,sales:0,revenue:0};
+      if(isSale){affMap[affId].sales++;affMap[affId].revenue+=amt;}
+    }
+
+    if(recentTx.length<25&&(isSale||inPeriod)){
+      recentTx.push({
+        date:ts?new Date(ts*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}):'',
+        type:isRef?'refund':isCB?'chargeback':'sale',
+        amount:amt,product:pname!==pid?pname:'',
+        customer:custName||(email?email.split('@')[0]:''),
+        country,affiliate:affName||affId||'',
+      });
+    }
+  }
+
+  const gross=netKept+refundAmt+cbAmt;
+  const netEarnings=netKept;
+  const totalSales=orders+refunds+cbs;
+
+  const prods=Object.values(prodMap).sort((a,b)=>b.revenue-a.revenue)
+    .map(p=>({...p,aov:p.orders>0?p.revenue/p.orders:0,refundRate:p.orders>0?p.refunds/p.orders*100:0,cbRate:p.orders>0?p.chargebacks/p.orders*100:0}));
+  const affs=Object.values(affMap).sort((a,b)=>b.revenue-a.revenue).slice(0,20).map((a,i)=>({...a,rank:i+1}));
+  const lastSaleDate=lastSaleTs?new Date(lastSaleTs*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase():'';
+
+  return{
+    jvz_sales:totalSales,
+    jvz_earnings:gross,
+    jvz_net_earnings:netEarnings,
+    jvz_asv:totalSales>0?gross/totalSales:0,
+    jvz_aov:orders>0?netKept/orders:0,
+    jvz_refund_pct:totalSales>0?refunds/totalSales*100:0,
+    jvz_refund_amt_pct:gross>0?refundAmt/gross*100:0,
+    jvz_refunds:refunds,
+    jvz_refund_dollars:refundAmt,
+    jvz_disputes:cbs,
+    jvz_disputes_dollars:cbAmt,
+    jvz_disputes_pct:totalSales>0?cbs/totalSales*100:0,
+    date_range:dateRange,
+    range_label:rangeMeta?.range_label||dateRange,
+    range_start:rangeStart||'',
+    range_end:rangeEnd||'',
+    total_revenue:gross,
+    net_revenue:netEarnings,
+    total_orders:orders,
+    unique_customers:emails.size,
+    avg_order_value:orders>0?netKept/orders:0,
+    refund_rate:totalSales>0?refunds/totalSales*100:0,
+    refund_amount:refundAmt,
+    total_refunds:refunds,
+    chargeback_rate:totalSales>0?cbs/totalSales*100:0,
+    chargeback_amount:cbAmt,
+    total_chargebacks:cbs,
+    total_platform_fees:totalFees||undefined,
+    seller_net_revenue:sellerGross||undefined,
+    last_sale_date:lastSaleDate,
+    top_products:prods,
+    affiliates:affs,
+    recent_transactions:recentTx,
+    _disputes_unavailable:true, /* JVZoo's /transactions API exposes no chargeback/dispute status — always 0 */
+  };
 }
 
 const COUNTRY_NAMES={US:'United States',GB:'United Kingdom',CA:'Canada',AU:'Australia',DE:'Germany',FR:'France',NL:'Netherlands',IN:'India',NZ:'New Zealand',SG:'Singapore',AE:'UAE',ZA:'South Africa',PH:'Philippines',MY:'Malaysia',NG:'Nigeria',IE:'Ireland',SE:'Sweden',NO:'Norway',DK:'Denmark',FI:'Finland',CH:'Switzerland',ES:'Spain',IT:'Italy',BR:'Brazil',MX:'Mexico',JP:'Japan',KR:'South Korea',PK:'Pakistan',BD:'Bangladesh',GH:'Ghana',KE:'Kenya'};
@@ -1054,8 +1200,8 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
   const isJVZ=platform==='JVzoo';
 
   /* Time-frame selector (JVZoo only) */
-  const drOpts=['today','yesterday','last7','thismonth','lastmonth'];
-  const drLabels={today:'Today',yesterday:'Yesterday',last7:'Last 7 Days',thismonth:'This Month',lastmonth:'Last Month'};
+  const drOpts=['today','yesterday','last7','thismonth','lastmonth','alltime'];
+  const drLabels={today:'Today',yesterday:'Yesterday',last7:'Last 7 Days',thismonth:'This Month',lastmonth:'Last Month',alltime:'All Time'};
   const drSelectHTML=isJVZ?`<select class="dr-select" onclick="event.stopPropagation()" onchange="document.querySelector('[data-id=\\'${cid}\\']').dataset.daterange=this.value;refreshOffer('${cid}')">${drOpts.map(v=>`<option value="${v}"${v===dateRange?' selected':''}>${drLabels[v]}</option>`).join('')}</select>`:'';
 
   /* ── Error state */
@@ -1098,7 +1244,7 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
         <thead><tr>
           <th></th><th>Sales</th><th>Earnings</th><th>Net Earnings</th>
           <th>ASV</th><th>AOV</th><th>Refund%</th><th>Refund Amt%</th>
-          <th>Refunds</th><th>Refund $</th><th>Disputes</th><th>Disputes $</th><th>Disputes%</th>
+          <th>Refunds</th><th>Refund $</th><th>Disputes*</th><th>Disputes $*</th><th>Disputes%*</th>
         </tr></thead>
         <tbody><tr>
           <td>${escHtml(drLabels[dateRange]||dateRange)}</td>
@@ -1111,11 +1257,12 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
           <td>${fv(Number(r.jvz_refund_amt_pct||0).toFixed(2)+'%',refCl)}</td>
           <td>${fv((r.jvz_refunds||0).toLocaleString(),r.jvz_refunds?'red':'')}</td>
           <td>${fv(fmt(r.jvz_refund_dollars||0),r.jvz_refund_dollars?'red':'')}</td>
-          <td>${fv((r.jvz_disputes||0).toLocaleString(),r.jvz_disputes?'red':'')}</td>
-          <td>${fv(fmt(r.jvz_disputes_dollars||0),r.jvz_disputes_dollars?'red':'')}</td>
-          <td>${fv((dispPct).toFixed(2)+'%',dispCl)}</td>
+          <td>${na}</td>
+          <td>${na}</td>
+          <td>${na}</td>
         </tr></tbody>
       </table></div>
+      <div style="font-size:.58rem;color:rgba(150,150,165,.45);padding:4px 2px 0">*JVZoo's transaction API does not expose dispute/chargeback data — not retrievable</div>
     </div>`;
   })():'';
 
