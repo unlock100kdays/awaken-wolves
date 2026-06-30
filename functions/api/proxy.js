@@ -224,12 +224,18 @@ async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth',
       }
     };
 
+    /* A failed first page must NOT be treated as "no more data" — that silently
+       truncates the fetch (confirmed: caused JVZoo all-time history to cut off
+       mid-range once page-level retries were exhausted on one unlucky page out
+       of thousands). Surface it as a real error so the client retries the chunk. */
     const first = await fetchPage(pageOffset);
-    let lastPage = null, totalCount = null;
-    if (first) { addTx(first.tx); lastPage = first.lastPage; totalCount = first.total; }
+    if (!first) return { success: false, error: `JVZoo page ${pageOffset} failed after retries` };
+    addTx(first.tx);
+    const lastPage = first.lastPage, totalCount = first.total;
 
     const endPage = lastPage !== null ? Math.min(pageOffset + pageLimit - 1, lastPage) : pageOffset;
 
+    let failedPages = 0;
     if (first?.hasMore && endPage > pageOffset) {
       const CONC = 3;
       for (let p = pageOffset + 1; p <= endPage; p += CONC) {
@@ -238,12 +244,17 @@ async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth',
         const results = await Promise.allSettled(batch.map(pp => fetchPage(pp)));
         for (const res of results) {
           const v = res.status === 'fulfilled' ? res.value : null;
-          if (v) addTx(v.tx);
+          if (v) addTx(v.tx); else failedPages++;
         }
       }
     }
 
-    const nextOffset = (lastPage !== null && endPage < lastPage) ? endPage + 1 : null;
+    /* A page within this chunk failed even after its own retries — don't silently
+       drop it. Re-point next_offset at the chunk's own start so the client
+       re-fetches this whole chunk rather than skipping past missing data. */
+    const nextOffset = failedPages > 0
+      ? pageOffset
+      : (lastPage !== null && endPage < lastPage) ? endPage + 1 : null;
 
     return {
       success: true,
@@ -252,6 +263,7 @@ async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth',
         total_count: totalCount,
         last_page:   lastPage,
         next_offset: nextOffset,
+        failed_pages: failedPages,
         range_start: rangeStart,
         range_end:   rangeEnd,
         range_label: rangeLabel,
