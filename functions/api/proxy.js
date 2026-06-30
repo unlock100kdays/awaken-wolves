@@ -378,21 +378,17 @@ async function jvzoo(username, apiKey, action) {
     const startYear = 2025, startMonth = 7; /* last 12 months */
     const now = new Date();
     const endYear = now.getFullYear(), endMonth = now.getMonth() + 1;
+    /* Build non-overlapping monthly chunks. Past months end on their last day;
+       current month uses tomorrow so today's transactions are included. */
     const chunks = [];
     let cy = startYear, cm = startMonth;
-    while (cy < endYear || (cy === endYear && cm <= endMonth)) {
+    while (cy < endYear || (cy === endYear && cm < endMonth)) {
       chunks.push({ start: isoYM(cy, cm), end: lastDayISO(cy, cm) });
       cm++;
       if (cm > 12) { cm = 1; cy++; }
     }
-    /* Add current partial month */
-    chunks.push({ start: isoYM(endYear, endMonth), end: isoTomorrow });
+    chunks.push({ start: isoYM(endYear, endMonth), end: isoTomorrow }); /* current month */
 
-    /* JVZoo v3.0 API facts (confirmed by probing):
-       - Response: { meta: { results_count, total_count, pagination: { page_size, page_index, has_more } }, results: [...] }
-       - Page index is 0-based
-       - page_size is always 50 (ignores limit/per_page params)
-       - total_count gives exact total records for the date range */
     const fetchPage = async (start_date, end_date, page) => {
       try {
         const q = new URLSearchParams({ start_date, end_date, page_index: String(page) });
@@ -400,12 +396,12 @@ async function jvzoo(username, apiKey, action) {
         if (!r.ok) return null;
         const d = await r.json().catch(() => null);
         if (!d) return null;
-        const tx   = Array.isArray(d?.results) ? d.results : (Array.isArray(d) ? d : []);
-        const pag  = d?.meta?.pagination ?? {};
-        const hasMore   = pag.has_more ?? false;
-        const pageSize  = pag.page_size ?? 50;
-        const total     = d?.meta?.total_count ?? null;
-        const lastPage  = total !== null ? Math.ceil(total / pageSize) - 1 : null; /* 0-indexed last page */
+        const tx      = Array.isArray(d?.results) ? d.results : (Array.isArray(d) ? d : []);
+        const pag     = d?.meta?.pagination ?? {};
+        const hasMore = pag.has_more ?? false;
+        const pageSize = pag.page_size ?? 50;
+        const total   = d?.meta?.total_count ?? null;
+        const lastPage = total !== null ? Math.ceil(total / pageSize) - 1 : null;
         return { tx, hasMore, lastPage };
       } catch { return null; }
     };
@@ -417,22 +413,19 @@ async function jvzoo(username, apiKey, action) {
       }
     };
 
-    /* Run all monthly chunks in parallel; pages 0-indexed, 3 concurrent per chunk */
-    await Promise.allSettled(chunks.map(async (chunk) => {
-      /* Page 0 first — get data and discover total page count */
+    const fetchChunk = async (chunk) => {
       const first = await fetchPage(chunk.start, chunk.end, 0);
       if (!first || first.tx.length === 0) return;
       addTx(first.tx);
+      if (!first.hasMore) return;
 
-      if (!first.hasMore) return; /* only 1 page in this chunk */
-
-      const MAX_PAGE    = first.lastPage ?? 200; /* 0-indexed */
-      const CONCURRENCY = 3;
+      const MAX_PAGE    = first.lastPage ?? 200;
+      const CONCURRENCY = 2; /* 2 concurrent per chunk; 4 chunks run at a time = 8 max JVZoo reqs */
 
       for (let p = 1; p <= MAX_PAGE; p += CONCURRENCY) {
-        const batchNums = [];
-        for (let pp = p; pp <= Math.min(p + CONCURRENCY - 1, MAX_PAGE); pp++) batchNums.push(pp);
-        const results = await Promise.allSettled(batchNums.map(pp => fetchPage(chunk.start, chunk.end, pp)));
+        const batch = [];
+        for (let pp = p; pp <= Math.min(p + CONCURRENCY - 1, MAX_PAGE); pp++) batch.push(pp);
+        const results = await Promise.allSettled(batch.map(pp => fetchPage(chunk.start, chunk.end, pp)));
         let hitEmpty = false;
         for (const r of results) {
           const res = r.status === 'fulfilled' ? r.value : null;
@@ -441,7 +434,13 @@ async function jvzoo(username, apiKey, action) {
         }
         if (hitEmpty && first.lastPage === null) break;
       }
-    }));
+    };
+
+    /* Process chunks in groups of 4 — max 4×2=8 concurrent JVZoo requests (avoids rate limits) */
+    const CHUNK_BATCH = 4;
+    for (let i = 0; i < chunks.length; i += CHUNK_BATCH) {
+      await Promise.allSettled(chunks.slice(i, i + CHUNK_BATCH).map(fetchChunk));
+    }
 
     if (all.length === 0 && fetchErr) return { success: false, error: fetchErr };
     if (all.length === 0) return { success: false, error: 'JVZoo returned 0 transactions. Check API key.' };
