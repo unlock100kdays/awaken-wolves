@@ -111,6 +111,13 @@ async function explFetch(username, apiKey, startdate, enddate) {
 
   if (text.trimStart().startsWith('<')) throw new Error('BOT_BLOCKED — Explodely is behind bot protection');
 
+  let d;
+  try { d = JSON.parse(text); } catch { d = null; }
+
+  if (d?.error === 'invalidapikey')    throw new Error('Invalid API key or username');
+  if (d?.error === 'invalid_sellerid') throw new Error('Not a valid Explodely seller account');
+  if (d?.error) throw new Error(`Explodely error: ${d.error}`);
+
   if (!r.ok) {
     const body = text.trim();
     throw new Error(body.length > 10
@@ -119,13 +126,7 @@ async function explFetch(username, apiKey, startdate, enddate) {
     );
   }
 
-  let d;
-  try { d = JSON.parse(text); }
-  catch { throw new Error(`Explodely returned non-JSON (HTTP ${r.status}): ${text.slice(0, 200)}`); }
-
-  if (d?.error === 'invalidapikey')    throw new Error('Invalid API key or username');
-  if (d?.error === 'invalid_sellerid') throw new Error('Not a valid Explodely seller account');
-  if (d?.error) throw new Error(`Explodely error: ${d.error}`);
+  if (!d) throw new Error(`Explodely returned non-JSON (HTTP ${r.status}): ${text.slice(0, 200)}`);
 
   const arr = Array.isArray(d)
     ? d
