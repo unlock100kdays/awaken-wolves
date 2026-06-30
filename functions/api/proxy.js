@@ -124,15 +124,6 @@ async function explodely(username, apiKey, action, startdate, enddate) {
     }
   }
 
-  if (action === 'debugAction') {
-    const q = new URLSearchParams({ username, apikey: apiKey, apiaction: startdate /* reused as apiaction name */, startdate: '01-dec-2025', enddate: '31-dec-2025' });
-    const r = await fetch(`https://api.explodely.com/v1/sale?${q}`, {
-      headers: { Accept: 'application/json', 'User-Agent': 'CloudflareWorker/1.0' },
-    });
-    const text = await r.text();
-    return { success: true, status: r.status, bodySnippet: text.slice(0, 400) };
-  }
-
   return { success: false, error: 'Unknown action' };
 }
 
