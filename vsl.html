@@ -243,6 +243,7 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 .form-hint{font-size:.62rem;color:rgba(138,150,163,.35);margin-top:4px;font-style:italic}
 .form-input,.form-select{background:rgba(255,255,255,.03);border:1px solid rgba(180,0,0,.2);border-radius:4px;padding:8px 11px;font-family:inherit;font-size:.8rem;color:var(--text);outline:none;transition:border-color .2s;width:100%}
 .form-input:focus,.form-select:focus{border-color:rgba(180,0,0,.5)}
+.form-input:disabled{opacity:.55;cursor:not-allowed}
 .form-input::placeholder{color:rgba(138,150,163,.3)}
 .form-select option{background:#0d0d14}
 
@@ -521,8 +522,14 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
   <div class="modal">
     <div class="modal-title" id="mo-title">🩸 Connect Live Offer</div>
 
-    <!-- STEP 1: Platform select -->
+    <!-- STEP 1: Offer name + Platform select -->
     <div id="step-plat" class="m-step active">
+      <div class="form-group">
+        <label class="form-label">Offer Name</label>
+        <input class="form-input" id="inp-group-name" list="existing-offer-names" placeholder="e.g. Copy-Paste Millionaire" oninput="document.getElementById('inp-group-name').style.borderColor=''"/>
+        <datalist id="existing-offer-names"></datalist>
+        <div class="form-hint">One offer can run on multiple platforms — type an existing offer name to add another platform to it, or a new name to start one.</div>
+      </div>
       <div class="form-group">
         <div class="form-label">Select Platform</div>
         <div class="plat-chips">
@@ -532,7 +539,7 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
           <div class="plat-chip" data-plat="Cartpanda" onclick="choosePlatform(this)">Cartpanda</div>
           <div class="plat-chip" data-plat="Digistore" onclick="choosePlatform(this)">Digistore</div>
         </div>
-        <div class="form-hint">Choose a platform to pull your offer data from</div>
+        <div class="form-hint">Choose a platform to pull this offer's data from</div>
       </div>
     </div>
 
@@ -717,7 +724,7 @@ const PLAT={
 /* ══════════════════════════════════════════
    MODAL STATE
 ══════════════════════════════════════════ */
-let MC='bizops', MP=null, MOffers=[], MSelectedId=null, MPresetGroupName=null;
+let MC='bizops', MP=null, MOffers=[], MSelectedId=null, MPresetGroupName=null, MGroupName='', MPresetGroupId=null;
 
 function showStep(id){
   ['step-plat','step-creds','step-offers','step-loading'].forEach(s=>{
@@ -725,16 +732,23 @@ function showStep(id){
   });
 }
 
-function openAddOffer(col,presetGroupName){
-  MC=col;MP=null;MOffers=[];MSelectedId=null;MPresetGroupName=presetGroupName||null;
+function openAddOffer(col,presetGroupName,presetGroupId){
+  MC=col;MP=null;MOffers=[];MSelectedId=null;MGroupName='';MPresetGroupName=presetGroupName||null;MPresetGroupId=presetGroupId||null;
   document.querySelectorAll('.plat-chip').forEach(c=>c.classList.remove('selected'));
   document.getElementById('mo-title').textContent=MPresetGroupName?`🩸 Add Platform — ${MPresetGroupName}`:'🩸 Connect Live Offer';
   document.getElementById('creds-saved-banner').innerHTML='';
   /* Reset offer-list visibility for platforms that have a listing */
   document.getElementById('offer-list').style.display='';
   document.getElementById('divider-or').style.display='';
-  document.getElementById('offer-list-label').textContent='Offers found on your account';
-  document.getElementById('inp-offer-manual').placeholder='Offer name (if not listed above)…';
+  document.getElementById('offer-list-label').textContent='Select your product (sets tracking ID)';
+  document.getElementById('inp-offer-manual').placeholder='Product / Offer ID (optional)…';
+  /* Offer-name field: locked + prefilled when adding a platform to an existing group */
+  const nameInp=document.getElementById('inp-group-name');
+  nameInp.value=MPresetGroupName||'';
+  nameInp.disabled=!!MPresetGroupName;
+  nameInp.style.borderColor='';
+  const existingNames=[...document.querySelectorAll(`#list-live-${col} .offer-group`)].map(g=>g.dataset.groupName||'').filter(Boolean);
+  document.getElementById('existing-offer-names').innerHTML=existingNames.map(n=>`<option value="${escHtml(n)}">`).join('');
   showStep('step-plat');
   document.getElementById('modal-offer').classList.add('open');
 }
@@ -742,6 +756,14 @@ function closeModal(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.modal-overlay').forEach(ov=>ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('open');}));
 
 function choosePlatform(el){
+  const nameInp=document.getElementById('inp-group-name');
+  const typedName=nameInp.value.trim();
+  if(!typedName){
+    nameInp.style.borderColor='rgba(220,0,0,.7)';
+    setTimeout(()=>nameInp.style.borderColor='',1200);
+    return;
+  }
+  MGroupName=typedName;
   document.querySelectorAll('.plat-chip').forEach(c=>c.classList.remove('selected'));
   el.classList.add('selected');
   MP=el.dataset.plat;
@@ -801,8 +823,8 @@ async function submitCreds(){
   }
   const cfg2=PLAT[MP]||{};
   if(cfg2.noOfferList){
-    /* Platform has no offer listing — skip directly to name entry */
-    goToNameEntry();
+    /* Platform has no product listing — offer name already captured in step 1 */
+    finalizeConnect('');
     return;
   }
   const st=document.getElementById('creds-status');
@@ -812,24 +834,9 @@ async function submitCreds(){
   document.getElementById('btn-fetch').disabled=false;
 }
 
-function goToNameEntry(){
-  /* For platforms with no offer listing API (e.g. Explodely) */
-  document.getElementById('offer-list').style.display='none';
-  document.getElementById('divider-or').style.display='none';
-  document.getElementById('offer-list-label').textContent='Your Offer Name';
-  document.getElementById('inp-offer-manual').placeholder='e.g. "Keto Breakthrough", "Muscle Max Pro"…';
-  document.getElementById('inp-offer-manual').value=MPresetGroupName||'';
-  const st=document.getElementById('offer-status');
-  st.className='status-msg success show';
-  st.textContent=`✓ ${MP} credentials saved — enter your offer name and we'll pull all your real sales data`;
-  document.getElementById('mo-title').textContent=`💰 Name Your Offer — ${MP}`;
-  setTimeout(()=>document.getElementById('inp-offer-manual').focus(),80);
-  showStep('step-offers');
-}
-
 async function loadOffers(plat,creds){
   showStep('step-loading');
-  document.getElementById('loading-msg').textContent=`Fetching offer list from ${plat}…`;
+  document.getElementById('loading-msg').textContent=`Fetching product list from ${plat}…`;
   const res=await apiFetchOffers(plat,creds);
   MOffers=res.offers||[];
 
@@ -838,26 +845,26 @@ async function loadOffers(plat,creds){
   if(MOffers.length){
     list.innerHTML=MOffers.map(o=>`<div class="offer-opt" data-id="${escHtml(String(o.id))}" onclick="selectOffer(this)">${escHtml(o.name)}</div>`).join('');
   } else {
-    list.innerHTML=`<div class="offer-opt" style="color:rgba(138,150,163,.4);cursor:default">No offers returned — enter name below</div>`;
+    list.innerHTML=`<div class="offer-opt" style="color:rgba(138,150,163,.4);cursor:default">No products returned — you can skip this step</div>`;
   }
 
   const offerSt=document.getElementById('offer-status');
   if(res.error){
     offerSt.className='status-msg warn show';
-    offerSt.textContent=`⚠ ${res.error} — Enter offer name manually.`;
+    offerSt.textContent=`⚠ ${res.error} — you can skip this step.`;
   } else if(res.note){
     offerSt.className='status-msg success show';
     offerSt.textContent=`✓ Credentials verified. ${res.note}`;
   } else if(MOffers.length){
     offerSt.className='status-msg success show';
-    offerSt.textContent=`✓ Found ${MOffers.length} offer${MOffers.length>1?'s':''} on ${plat} — select one or type manually`;
+    offerSt.textContent=`✓ Found ${MOffers.length} product${MOffers.length>1?'s':''} on ${plat} for "${MGroupName}" — select one, or skip`;
   } else {
     offerSt.className='status-msg warn show';
-    offerSt.textContent='No product listing API — enter your offer name manually.';
+    offerSt.textContent='No product listing API — you can skip this step.';
   }
 
-  document.getElementById('inp-offer-manual').value=MPresetGroupName||'';
-  document.getElementById('mo-title').textContent=`💰 Select Offer — ${plat}`;
+  document.getElementById('inp-offer-manual').value='';
+  document.getElementById('mo-title').textContent=`💰 ${MGroupName} — Select Product on ${plat}`;
   showStep('step-offers');
 }
 
@@ -868,18 +875,15 @@ function selectOffer(el){
   document.getElementById('inp-offer-manual').value='';
 }
 
-async function connectOffer(){
+function connectOffer(){
   const selectedEl=document.querySelector('.offer-opt.selected');
   const manual=document.getElementById('inp-offer-manual').value.trim();
-  let offerId=MSelectedId, offerName='';
-  if(selectedEl&&!manual){
-    offerName=selectedEl.textContent;offerId=MSelectedId;
-  } else if(manual){
-    offerName=manual;offerId='';
-  } else {
-    document.getElementById('inp-offer-manual').style.borderColor='rgba(220,0,0,.7)';
-    setTimeout(()=>document.getElementById('inp-offer-manual').style.borderColor='',1200);return;
-  }
+  const offerId=selectedEl?MSelectedId:(manual||'');
+  finalizeConnect(offerId);
+}
+
+async function finalizeConnect(offerId){
+  const offerName=MGroupName;
   showStep('step-loading');
   document.getElementById('loading-msg').textContent=`Pulling all data for "${offerName}"…`;
   const creds=getCredFor(MP);
@@ -891,7 +895,7 @@ async function connectOffer(){
   } else {
     apiErr='No credentials saved for '+MP;
   }
-  createOfferCard(offerName,MP,raw,MC,uid(),offerId,false,apiErr,null,initDR);
+  createOfferCard(offerName,MP,raw,MC,uid(),offerId,false,apiErr,null,initDR,MPresetGroupId);
   closeModal('modal-offer');updateStats();saveState();scheduleVeins();
 }
 
@@ -1206,14 +1210,21 @@ function statCls(spec,v){
   return c;
 }
 
-function getOrCreateOfferGroup(name,col){
+function getOrCreateOfferGroup(name,col,forceGroupId){
   const colList=document.getElementById(`list-live-${col}`);
   const colEmp=colList.querySelector('.empty-state');if(colEmp)colEmp.remove();
+  /* forceGroupId always wins — guarantees "+ Add Platform" lands back in the
+     exact group it was launched from, even if the name field gets edited. */
+  if(forceGroupId){
+    const byId=colList.querySelector(`.offer-group[data-group-id="${forceGroupId}"]`);
+    if(byId)return byId.querySelector('.og-platforms');
+  }
   const norm=(name||'').trim().toLowerCase();
   const existing=[...colList.querySelectorAll('.offer-group')].find(g=>(g.dataset.groupName||'').trim().toLowerCase()===norm);
   if(existing)return existing.querySelector('.og-platforms');
   const group=document.createElement('div');
   group.className='offer-group';
+  group.dataset.groupId=forceGroupId||uid();
   group.dataset.groupName=name||'';
   group.innerHTML=`
     <div class="oc-header" onclick="toggleCard(this,'oc-body')">
@@ -1225,7 +1236,7 @@ function getOrCreateOfferGroup(name,col){
     </div>
     <div class="oc-body collapsed">
       <div class="og-platforms"></div>
-      <button class="refresh-btn" onclick="openAddOffer('${col}',this.closest('.offer-group').dataset.groupName)">+ Add Platform</button>
+      <button class="refresh-btn" onclick="openAddOffer('${col}',this.closest('.offer-group').dataset.groupName,this.closest('.offer-group').dataset.groupId)">+ Add Platform</button>
     </div>`;
   colList.appendChild(group);
   return group.querySelector('.og-platforms');
@@ -1239,9 +1250,9 @@ function removeGroup(e,btn){
   setTimeout(()=>{group.remove();if(!list.querySelector('.offer-group'))list.innerHTML='<div class="empty-state">Empty — click + to add.</div>';updateStats();saveState();scheduleVeins();},240);
 }
 
-function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,staleErr,dateRange){
+function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,staleErr,dateRange,forceGroupId){
   dateRange=dateRange||'thismonth';
-  const list=getOrCreateOfferGroup(name,col);
+  const list=getOrCreateOfferGroup(name,col,forceGroupId);
   const emp=list.querySelector('.empty-state');if(emp)emp.remove();
   const card=document.createElement('div');
   card.className='offer-card';
