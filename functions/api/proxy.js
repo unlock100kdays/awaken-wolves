@@ -436,10 +436,17 @@ async function jvzoo(username, apiKey, action) {
       }
     };
 
-    /* Process chunks in groups of 4 — max 4×2=8 concurrent JVZoo requests (avoids rate limits) */
-    const CHUNK_BATCH = 4;
-    for (let i = 0; i < chunks.length; i += CHUNK_BATCH) {
-      await Promise.allSettled(chunks.slice(i, i + CHUNK_BATCH).map(fetchChunk));
+    /* Current month is last in chunks[]; process it FIRST so today/yesterday/7-day are
+       always populated even if the Worker runs out of time on historical months. */
+    const currentMonthChunk = chunks[chunks.length - 1];
+    const olderChunks       = chunks.slice(0, chunks.length - 1);
+
+    await fetchChunk(currentMonthChunk);
+
+    /* Historical months in groups of 5 — max 5×2=10 concurrent JVZoo requests */
+    const CHUNK_BATCH = 5;
+    for (let i = 0; i < olderChunks.length; i += CHUNK_BATCH) {
+      await Promise.allSettled(olderChunks.slice(i, i + CHUNK_BATCH).map(fetchChunk));
     }
 
     if (all.length === 0 && fetchErr) return { success: false, error: fetchErr };
