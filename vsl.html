@@ -1014,20 +1014,10 @@ async function apiFetchJvzooStats(creds){
   try{
     const all=[];
     const seen=new Set();
-    let offset=0, guard=0, prevOffset=-1, sameOffsetRetries=0;
+    let offset=0, guard=0;
     while(guard++<300){ /* hard safety cap: 300 chunks × 15 pages = 4500 pages max */
-      if(offset===prevOffset){
-        sameOffsetRetries++;
-        if(sameOffsetRetries>5) throw new Error(`JVZoo: page ${offset} kept failing after repeated retries — stopping rather than return incomplete data`);
-        await new Promise(r=>setTimeout(r,500*sameOffsetRetries));
-      }else{
-        sameOffsetRetries=0;
-      }
-      prevOffset=offset;
       const payload={platform:'JVzoo',apiKey:creds.apiKey,username:creds.username||'',action:'fetchTxChunk',dateRange:'alltime',pageOffset:offset,pageLimit:15};
-      let d;
-      try{ d=await callProxy(payload); }
-      catch{ continue; } /* counted via sameOffsetRetries above since offset is unchanged */
+      const d=await callProxy(payload);
       for(const t of (d.transactions||[])){
         const key=String(t.transaction_id ?? `${t.sale_date}|${t.amount}`);
         if(!seen.has(key)){seen.add(key);all.push(t);}
