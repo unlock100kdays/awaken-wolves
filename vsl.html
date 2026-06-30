@@ -197,6 +197,12 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 .oc-body{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
 .oc-body.collapsed{display:none}
 
+/* DRAG REORDER */
+.drag-handle{color:rgba(255,255,255,.25);cursor:grab;font-size:.85rem;flex-shrink:0;padding:0 2px;letter-spacing:-2px}
+.drag-handle:hover{color:rgba(255,255,255,.6)}
+.drag-handle:active{cursor:grabbing}
+.offer-group.dragging,.project-card.dragging{opacity:.35}
+
 /* DATA GRID */
 .data-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:5px}
 .df-item{background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.04);border-radius:4px;padding:6px 8px;display:flex;flex-direction:column;gap:1px}
@@ -1607,10 +1613,12 @@ function getOrCreateOfferGroup(name,col,forceGroupId){
   if(existing)return existing.querySelector('.og-platforms');
   const group=document.createElement('div');
   group.className='offer-group';
+  group.draggable=true;
   group.dataset.groupId=forceGroupId||uid();
   group.dataset.groupName=name||'';
   group.innerHTML=`
     <div class="oc-header" onclick="toggleCard(this,'oc-body')">
+      <span class="drag-handle" title="Drag to reorder" onclick="event.stopPropagation()">⠿</span>
       <span class="oc-name">📦 ${escHtml(name||'Unnamed Offer')}</span>
       <span class="oc-rev">$0</span>
       <span class="live-dot">● LIVE</span>
@@ -1898,11 +1906,13 @@ function createProjectCardFromData(proj,col,fromRestore){
   }).join('');
   const card=document.createElement('div');
   card.className='project-card';
+  card.draggable=true;
   card.dataset.id=proj.id||uid();
   card.dataset.name=proj.name;card.dataset.pm=proj.pm||'—';card.dataset.vsl=proj.vsl||'—';
   card.dataset.script=proj.script||'not-started';card.dataset.deadline=proj.deadline||'';
   card.innerHTML=`
     <div class="pc-header" onclick="toggleCard(this,'pc-body')">
+      <span class="drag-handle" title="Drag to reorder" onclick="event.stopPropagation()">⠿</span>
       <span class="pc-name">⚙️ ${escHtml(proj.name)}</span>
       <span class="pc-deadline">${dlLbl}</span>
       <span class="pc-pct">${pct}%</span>
@@ -2078,9 +2088,47 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 /* ══════════════════════════════════════════
+   DRAG-TO-REORDER
+══════════════════════════════════════════ */
+function dragAfterElement(list,y){
+  const items=[...list.querySelectorAll(':scope > .offer-group:not(.dragging), :scope > .project-card:not(.dragging)')];
+  return items.reduce((closest,child)=>{
+    const box=child.getBoundingClientRect();
+    const offset=y-box.top-box.height/2;
+    if(offset<0&&offset>closest.offset) return{offset,element:child};
+    return closest;
+  },{offset:-Infinity,element:null}).element;
+}
+function setupDragReorder(){
+  document.querySelectorAll('.sub-body').forEach(list=>{
+    list.addEventListener('dragstart',e=>{
+      const handle=e.target.closest('.drag-handle');
+      const item=handle&&handle.closest('.offer-group,.project-card');
+      if(!item){e.preventDefault();return;}
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain','');
+    });
+    list.addEventListener('dragend',e=>{
+      const item=list.querySelector('.dragging');
+      if(item)item.classList.remove('dragging');
+      saveState();
+    });
+    list.addEventListener('dragover',e=>{
+      const dragging=list.querySelector('.dragging');
+      if(!dragging)return;
+      e.preventDefault();
+      const after=dragAfterElement(list,e.clientY);
+      if(after==null)list.appendChild(dragging);
+      else if(after!==dragging)list.insertBefore(dragging,after);
+    });
+  });
+}
+
+/* ══════════════════════════════════════════
    BOOT
 ══════════════════════════════════════════ */
-window.addEventListener('DOMContentLoaded',restoreAll);
+window.addEventListener('DOMContentLoaded',()=>{restoreAll();setupDragReorder();});
 </script>
 </body>
 </html>
