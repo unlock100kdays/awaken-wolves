@@ -1647,6 +1647,7 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
   card.dataset.blob=JSON.stringify(raw||null);
   card.dataset.daterange=dateRange;
 
+  const isJVZ=(platform||'').trim().toLowerCase()==='jvzoo';
   const pclr=(PCFG[platform]||{color:'#8a96a3'}).color;
   const platBadge=platform?`<span class="plat-badge" style="color:${pclr}">${escHtml(platform)}</span>`:'';
 
