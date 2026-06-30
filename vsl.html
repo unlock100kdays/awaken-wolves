@@ -136,6 +136,13 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 .sn-saved{font-size:.6rem;color:rgba(0,200,80,.7);display:none}
 .sn-saved.show{display:inline}
 
+/* OFFER GROUP — parent wrapper holding one or more platform cards for the same offer name */
+.offer-group{background:rgba(14,4,4,.6);border:1px solid rgba(160,0,0,.32);border-radius:7px;overflow:hidden;position:relative}
+.offer-group::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(204,17,0,.8),transparent)}
+.offer-group > .oc-header{background:rgba(40,0,0,.18)}
+.offer-group .og-platforms{display:flex;flex-direction:column;gap:8px}
+.offer-group .og-platforms .offer-card{border-color:rgba(130,0,0,.22)}
+
 /* OFFER CARD */
 .offer-card{background:rgba(10,4,4,.92);border:1px solid rgba(130,0,0,.22);border-radius:6px;overflow:hidden;position:relative;transition:border-color .2s}
 .offer-card:hover{border-color:rgba(180,0,0,.42)}
@@ -710,7 +717,7 @@ const PLAT={
 /* ══════════════════════════════════════════
    MODAL STATE
 ══════════════════════════════════════════ */
-let MC='bizops', MP=null, MOffers=[], MSelectedId=null;
+let MC='bizops', MP=null, MOffers=[], MSelectedId=null, MPresetGroupName=null;
 
 function showStep(id){
   ['step-plat','step-creds','step-offers','step-loading'].forEach(s=>{
@@ -718,10 +725,10 @@ function showStep(id){
   });
 }
 
-function openAddOffer(col){
-  MC=col;MP=null;MOffers=[];MSelectedId=null;
+function openAddOffer(col,presetGroupName){
+  MC=col;MP=null;MOffers=[];MSelectedId=null;MPresetGroupName=presetGroupName||null;
   document.querySelectorAll('.plat-chip').forEach(c=>c.classList.remove('selected'));
-  document.getElementById('mo-title').textContent='🩸 Connect Live Offer';
+  document.getElementById('mo-title').textContent=MPresetGroupName?`🩸 Add Platform — ${MPresetGroupName}`:'🩸 Connect Live Offer';
   document.getElementById('creds-saved-banner').innerHTML='';
   /* Reset offer-list visibility for platforms that have a listing */
   document.getElementById('offer-list').style.display='';
@@ -811,7 +818,7 @@ function goToNameEntry(){
   document.getElementById('divider-or').style.display='none';
   document.getElementById('offer-list-label').textContent='Your Offer Name';
   document.getElementById('inp-offer-manual').placeholder='e.g. "Keto Breakthrough", "Muscle Max Pro"…';
-  document.getElementById('inp-offer-manual').value='';
+  document.getElementById('inp-offer-manual').value=MPresetGroupName||'';
   const st=document.getElementById('offer-status');
   st.className='status-msg success show';
   st.textContent=`✓ ${MP} credentials saved — enter your offer name and we'll pull all your real sales data`;
@@ -849,7 +856,7 @@ async function loadOffers(plat,creds){
     offerSt.textContent='No product listing API — enter your offer name manually.';
   }
 
-  document.getElementById('inp-offer-manual').value='';
+  document.getElementById('inp-offer-manual').value=MPresetGroupName||'';
   document.getElementById('mo-title').textContent=`💰 Select Offer — ${plat}`;
   showStep('step-offers');
 }
@@ -1199,9 +1206,42 @@ function statCls(spec,v){
   return c;
 }
 
+function getOrCreateOfferGroup(name,col){
+  const colList=document.getElementById(`list-live-${col}`);
+  const colEmp=colList.querySelector('.empty-state');if(colEmp)colEmp.remove();
+  const norm=(name||'').trim().toLowerCase();
+  const existing=[...colList.querySelectorAll('.offer-group')].find(g=>(g.dataset.groupName||'').trim().toLowerCase()===norm);
+  if(existing)return existing.querySelector('.og-platforms');
+  const group=document.createElement('div');
+  group.className='offer-group';
+  group.dataset.groupName=name||'';
+  group.innerHTML=`
+    <div class="oc-header" onclick="toggleCard(this,'oc-body')">
+      <span class="oc-name">📦 ${escHtml(name||'Unnamed Offer')}</span>
+      <span class="oc-rev">$0</span>
+      <span class="live-dot">● LIVE</span>
+      <span class="oc-toggle">▲</span>
+      <button class="oc-remove" onclick="removeGroup(event,this)">✕</button>
+    </div>
+    <div class="oc-body collapsed">
+      <div class="og-platforms"></div>
+      <button class="refresh-btn" onclick="openAddOffer('${col}',this.closest('.offer-group').dataset.groupName)">+ Add Platform</button>
+    </div>`;
+  colList.appendChild(group);
+  return group.querySelector('.og-platforms');
+}
+
+function removeGroup(e,btn){
+  e.stopPropagation();
+  const group=btn.closest('.offer-group');
+  const list=group.parentElement;
+  group.style.cssText+='opacity:0;transform:scale(.95);transition:all .22s';
+  setTimeout(()=>{group.remove();if(!list.querySelector('.offer-group'))list.innerHTML='<div class="empty-state">Empty — click + to add.</div>';updateStats();saveState();scheduleVeins();},240);
+}
+
 function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,staleErr,dateRange){
   dateRange=dateRange||'thismonth';
-  const list=document.getElementById(`list-live-${col}`);
+  const list=getOrCreateOfferGroup(name,col);
   const emp=list.querySelector('.empty-state');if(emp)emp.remove();
   const card=document.createElement('div');
   card.className='offer-card';
@@ -1560,6 +1600,15 @@ function updateStats(){
     totalAllTime+=Number(raw.total_revenue)||0;
   });
   document.getElementById('stat-alltime').textContent=totalAllTime>0?fmt(totalAllTime):'$0';
+  document.querySelectorAll('.offer-group').forEach(group=>{
+    let groupTotal=0;
+    group.querySelectorAll('.offer-card').forEach(card=>{
+      let raw=null; try{raw=JSON.parse(card.dataset.blob||'null');}catch{}
+      if(raw)groupTotal+=Number(raw.total_revenue)||0;
+    });
+    const revEl=group.querySelector(':scope > .oc-header .oc-rev');
+    if(revEl)revEl.textContent=fmt(groupTotal);
+  });
   const fills=[...document.querySelectorAll('.pc-progress-fill')];
   if(fills.length){const avg=Math.round(fills.reduce((s,f)=>s+parseFloat(f.style.width||0),0)/fills.length);document.getElementById('stat-complete').textContent=avg+'%';}
   else{document.getElementById('stat-complete').textContent='—';}
