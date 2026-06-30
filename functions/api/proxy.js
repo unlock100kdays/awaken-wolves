@@ -21,7 +21,7 @@ export async function onRequestPost({ request }) {
     if (!platform || !apiKey) return json({ success: false, error: 'Missing platform or apiKey' }, 400);
     let result;
     switch (platform) {
-      case 'Explodely': result = await explodely(username, apiKey, action); break;
+      case 'Explodely': result = await explodely(username, apiKey, action, body.startdate, body.enddate); break;
       case 'JVzoo':     result = await jvzoo(username, apiKey, action, offerId, dateRange, pageOffset, pageLimit); break;
       case 'Clickbank': result = await clickbank(apiKey, apiSecret, action, offerId); break;
       case 'Cartpanda': result = await cartpanda(apiKey, action, offerId); break;
@@ -136,9 +136,9 @@ async function explFetch(username, apiKey, startdate, enddate) {
   return Array.isArray(arr) ? arr : [];
 }
 
-async function explodely(username, apiKey, action) {
+async function explodely(username, apiKey, action, startdate, enddate) {
   if (action === 'debugRaw') {
-    const q = new URLSearchParams({ username, apikey: apiKey, apiaction: 'getsalebyget', startdate: '01-jan-2024', enddate: tomorrow() });
+    const q = new URLSearchParams({ username, apikey: apiKey, apiaction: 'getsalebyget', startdate: startdate || '01-jan-2024', enddate: enddate || tomorrow() });
     const r = await fetch(`https://api.explodely.com/v1/sale?${q}`, {
       headers: { Accept: 'application/json', 'User-Agent': 'CloudflareWorker/1.0' },
     });
