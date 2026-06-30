@@ -137,6 +137,17 @@ async function explFetch(username, apiKey, startdate, enddate) {
 }
 
 async function explodely(username, apiKey, action) {
+  if (action === 'debugRaw') {
+    const q = new URLSearchParams({ username, apikey: apiKey, apiaction: 'getsalebyget', startdate: '01-jan-2024', enddate: tomorrow() });
+    const r = await fetch(`https://api.explodely.com/v1/sale?${q}`, {
+      headers: { Accept: 'application/json', 'User-Agent': 'CloudflareWorker/1.0' },
+    });
+    const text = await r.text();
+    const headers = {};
+    for (const [k, v] of r.headers.entries()) headers[k] = v;
+    return { success: true, status: r.status, headers, bodyLen: text.length, bodySnippet: text.slice(0, 500) };
+  }
+
   /* fetchOffers — Explodely has no product listing endpoint.
      Just verify auth then let the frontend prompt for a name. */
   if (action === 'fetchOffers') {
