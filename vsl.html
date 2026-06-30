@@ -967,7 +967,11 @@ function aggregateJvzoo(all,rangeMeta,dateRange){
 
     let txDate=null;
     if(tx.sale_date){const d=new Date(tx.sale_date);if(!isNaN(d))txDate=d;}
-    const inPeriod=!txDate||!rangeSt||!rangeEn||(txDate>=rangeSt&&txDate<rangeEn);
+    let refDate=null;
+    if(tx.refund?.refund_date){const d=new Date(tx.refund.refund_date);if(!isNaN(d))refDate=d;}
+    const saleInPeriod=!txDate||!rangeSt||!rangeEn||(txDate>=rangeSt&&txDate<rangeEn);
+    const refundInPeriod=!refDate||!rangeSt||!rangeEn||(refDate>=rangeSt&&refDate<rangeEn);
+    const inPeriod=saleInPeriod&&refundInPeriod;
     const ts=txDate?Math.floor(txDate.getTime()/1000):0;
 
     const cust=tx.customer??{};

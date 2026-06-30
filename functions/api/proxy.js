@@ -566,12 +566,18 @@ async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth',
       const isCB      = status.includes('CHARG') || status.includes('DISPUT') || status.includes('CGBK');
       const isSale    = !isRef && !isCB;
 
-      /* For REFUNDED/CB: skip if original sale_date is outside the queried period.
-         JVZoo's Report only counts refunds of THIS period's sales; the API returns
-         all refunds PROCESSED in this period (including prior-month sales). */
+      /* For REFUNDED/CB: only count it if BOTH the original sale_date and the
+         refund_date fall inside the queried period. JVZoo's Report Center figure
+         appears to require both — sale-only matching overcounts by ~50% because it
+         pulls in refunds of this-period sales that were actually processed (and
+         thus reported) in a later period. */
       let txDate = null;
       if (tx.sale_date) { const d = new Date(tx.sale_date); if (!isNaN(d)) txDate = d; }
-      const inPeriod = !txDate || (txDate >= rangeSt && txDate < rangeEn);
+      let refDate = null;
+      if (tx.refund?.refund_date) { const d = new Date(tx.refund.refund_date); if (!isNaN(d)) refDate = d; }
+      const saleInPeriod = !txDate || (txDate >= rangeSt && txDate < rangeEn);
+      const refundInPeriod = !refDate || (refDate >= rangeSt && refDate < rangeEn);
+      const inPeriod = saleInPeriod && refundInPeriod;
 
       let ts = txDate ? Math.floor(txDate.getTime() / 1000) : 0;
 
