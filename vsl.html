@@ -73,30 +73,54 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 .run-pill::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--red);animation:pulse 1.5s infinite}
 
 /* STATS */
-.vsl-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;position:relative;z-index:1;margin-bottom:20px}
+.vsl-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;position:relative;z-index:1;margin-bottom:20px}
 .vs-card{
   position:relative;overflow:hidden;
-  background:linear-gradient(165deg,rgba(24,4,4,.9),rgba(6,6,10,.95) 60%);
-  border:1px solid rgba(180,0,0,.22);border-radius:7px;
-  padding:15px 18px;display:flex;align-items:center;gap:13px;
-  box-shadow:0 10px 26px rgba(0,0,0,.45),inset 0 0 0 1px rgba(0,0,0,.3);
+  background:linear-gradient(165deg,rgba(18,3,3,.94),rgba(5,5,8,.97) 60%);
+  border:1px solid rgba(180,0,0,.25);border-radius:5px;
+  padding:10px 13px;display:flex;align-items:center;gap:9px;
+  box-shadow:0 8px 20px rgba(0,0,0,.5),inset 0 0 0 1px rgba(0,0,0,.35);
   transition:border-color .2s,box-shadow .2s,transform .2s;
 }
 .vs-card::before{
-  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  content:'';position:absolute;top:0;left:0;right:0;height:1.5px;
   background:linear-gradient(90deg,transparent,var(--blood) 15%,var(--red) 50%,var(--ember) 65%,transparent 95%);
-  box-shadow:0 0 12px 1px rgba(204,17,0,.75);
+  box-shadow:0 0 10px 1px rgba(204,17,0,.7);
 }
 .vs-card::after{
-  content:'';position:absolute;bottom:-36px;right:-24px;width:100px;height:100px;
-  background:radial-gradient(circle,rgba(139,0,0,.4),transparent 72%);
+  content:'';position:absolute;bottom:-30px;right:-18px;width:80px;height:80px;
+  background:radial-gradient(circle,rgba(139,0,0,.32),transparent 72%);
   filter:blur(4px);pointer-events:none;
 }
-.vs-card:hover{border-color:rgba(204,17,0,.5);box-shadow:0 10px 26px rgba(139,0,0,.3),inset 0 0 0 1px rgba(0,0,0,.3);transform:translateY(-1px)}
-.vs-icon{font-size:1.45rem;flex-shrink:0;filter:drop-shadow(0 0 7px rgba(204,17,0,.55));position:relative;z-index:1}
-.vs-info{display:flex;flex-direction:column;gap:2px;position:relative;z-index:1}
-.vs-val{font-size:1.3rem;font-weight:800;color:#f2f2f2;text-shadow:0 0 14px rgba(204,17,0,.3)}
-.vs-label{font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--silver);opacity:.8}
+.vs-card:hover{border-color:rgba(204,17,0,.5);box-shadow:0 8px 20px rgba(139,0,0,.3),inset 0 0 0 1px rgba(0,0,0,.35);transform:translateY(-1px)}
+.vs-icon{font-size:1.2rem;flex-shrink:0;filter:drop-shadow(0 0 6px rgba(204,17,0,.5));position:relative;z-index:1}
+.vs-info{display:flex;flex-direction:column;gap:1px;position:relative;z-index:1}
+.vs-val{font-size:1.08rem;font-weight:800;color:#f2f2f2;text-shadow:0 0 12px rgba(204,17,0,.3);letter-spacing:.01em}
+.vs-label{font-size:.54rem;letter-spacing:.13em;text-transform:uppercase;color:var(--silver);opacity:.8}
+
+/* Wolf watermark, faint, behind the content */
+.vs-wolf-bg{position:absolute;right:-16px;bottom:-20px;width:88px;height:88px;fill:#cc1100;opacity:.07;pointer-events:none;z-index:0}
+
+/* HUD corner brackets — Mission-Impossible / targeting-reticle look */
+.vs-corner{position:absolute;width:9px;height:9px;border:1.5px solid rgba(255,60,20,.55);pointer-events:none;z-index:2}
+.vs-corner.tl{top:3px;left:3px;border-right:none;border-bottom:none}
+.vs-corner.tr{top:3px;right:3px;border-left:none;border-bottom:none}
+.vs-corner.bl{bottom:3px;left:3px;border-right:none;border-top:none}
+.vs-corner.br{bottom:3px;right:3px;border-left:none;border-top:none}
+
+/* Crawling energy ring — "lights up" as the flow line reaches this box */
+.vs-crawl{position:absolute;inset:0;border-radius:inherit;padding:1.5px;pointer-events:none;z-index:1;
+  background:conic-gradient(from 0deg,transparent 0%,transparent 78%,#ff6622 90%,#fff8f0 94%,#ff6622 98%,transparent 100%);
+  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+  opacity:0;animation:vsRotate 2.6s linear infinite;
+}
+#node-stat-live .vs-crawl{animation:vsRotate 2.6s linear infinite,vsGlowPulse 4.8s ease-in-out infinite;animation-delay:0s,0s}
+#node-stat-under .vs-crawl{animation:vsRotate 2.6s linear infinite,vsGlowPulse 4.8s ease-in-out infinite;animation-delay:0s,1.2s}
+#node-stat-complete .vs-crawl{animation:vsRotate 2.6s linear infinite,vsGlowPulse 4.8s ease-in-out infinite;animation-delay:0s,2.4s}
+#node-stat-alltime .vs-crawl{animation:vsRotate 2.6s linear infinite,vsGlowPulse 4.8s ease-in-out infinite;animation-delay:0s,3.6s}
+@keyframes vsRotate{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes vsGlowPulse{0%,19%,31%,100%{opacity:0}25%{opacity:1}}
 
 /* OPS GRID */
 .ops-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;position:relative;z-index:1;margin-bottom:20px;align-items:start}
@@ -406,6 +430,17 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 
   <div class="vsl-content" id="vsl-content">
     <svg id="vein-svg" class="vein-svg" style="position:absolute;top:0;left:0;pointer-events:none;z-index:0;overflow:visible"></svg>
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <symbol id="wolf-glyph" viewBox="0 0 300 310">
+        <path d="M 150 44 C 125 44,95 58,78 86 C 62 112,58 144,64 170 C 70 194,84 212,100 220 C 106 223,112 225,120 224 L 128 218 L 150 215 L 172 218 L 180 224 C 188 225,194 223,200 220 C 216 212,230 194,236 170 C 242 144,238 112,222 86 C 205 58,175 44,150 44 Z"/>
+        <path d="M 85 82 C 78 64,65 28,75 14 C 80 7,90 7,96 16 C 104 27,106 62,107 80 Z"/>
+        <path d="M 215 82 C 222 64,235 28,225 14 C 220 7,210 7,204 16 C 196 27,194 62,193 80 Z"/>
+        <ellipse cx="113" cy="148" rx="23" ry="18"/>
+        <ellipse cx="187" cy="148" rx="23" ry="18"/>
+        <path d="M 110 216 C 112 250,128 272,150 276 C 172 272,188 250,190 216 C 178 208,165 204,150 204 C 135 204,122 208,110 216 Z"/>
+        <path d="M 126 244 C 124 265,138 280,150 282 C 162 280,176 265,174 244 C 167 234,150 230,133 234 Z"/>
+      </symbol>
+    </svg>
 
     <!-- BANNER -->
     <div class="run-banner" id="node-root">
@@ -426,10 +461,30 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 
     <!-- STATS -->
     <div class="vsl-stats">
-      <div class="vs-card" id="node-stat-live"><span class="vs-icon">🎬</span><div class="vs-info"><span class="vs-val" id="stat-live">0</span><span class="vs-label">Live Operations</span></div></div>
-      <div class="vs-card" id="node-stat-under"><span class="vs-icon">⚙️</span><div class="vs-info"><span class="vs-val" id="stat-under">0</span><span class="vs-label">Undergoing Ops</span></div></div>
-      <div class="vs-card" id="node-stat-complete"><span class="vs-icon">🩸</span><div class="vs-info"><span class="vs-val" id="stat-complete">—</span><span class="vs-label">Avg Completion</span></div></div>
-      <div class="vs-card" id="node-stat-alltime"><span class="vs-icon">💰</span><div class="vs-info"><span class="vs-val" id="stat-alltime">$0</span><span class="vs-label">All-Time Revenue</span></div></div>
+      <div class="vs-card" id="node-stat-live">
+        <svg class="vs-wolf-bg"><use href="#wolf-glyph" width="100%" height="100%"/></svg>
+        <i class="vs-crawl"></i>
+        <i class="vs-corner tl"></i><i class="vs-corner tr"></i><i class="vs-corner bl"></i><i class="vs-corner br"></i>
+        <span class="vs-icon">🎬</span><div class="vs-info"><span class="vs-val" id="stat-live">0</span><span class="vs-label">Live Operations</span></div>
+      </div>
+      <div class="vs-card" id="node-stat-under">
+        <svg class="vs-wolf-bg"><use href="#wolf-glyph" width="100%" height="100%"/></svg>
+        <i class="vs-crawl"></i>
+        <i class="vs-corner tl"></i><i class="vs-corner tr"></i><i class="vs-corner bl"></i><i class="vs-corner br"></i>
+        <span class="vs-icon">⚙️</span><div class="vs-info"><span class="vs-val" id="stat-under">0</span><span class="vs-label">Undergoing Ops</span></div>
+      </div>
+      <div class="vs-card" id="node-stat-complete">
+        <svg class="vs-wolf-bg"><use href="#wolf-glyph" width="100%" height="100%"/></svg>
+        <i class="vs-crawl"></i>
+        <i class="vs-corner tl"></i><i class="vs-corner tr"></i><i class="vs-corner bl"></i><i class="vs-corner br"></i>
+        <span class="vs-icon">🩸</span><div class="vs-info"><span class="vs-val" id="stat-complete">—</span><span class="vs-label">Avg Completion</span></div>
+      </div>
+      <div class="vs-card" id="node-stat-alltime">
+        <svg class="vs-wolf-bg"><use href="#wolf-glyph" width="100%" height="100%"/></svg>
+        <i class="vs-crawl"></i>
+        <i class="vs-corner tl"></i><i class="vs-corner tr"></i><i class="vs-corner bl"></i><i class="vs-corner br"></i>
+        <span class="vs-icon">💰</span><div class="vs-info"><span class="vs-val" id="stat-alltime">$0</span><span class="vs-label">All-Time Revenue</span></div>
+      </div>
     </div>
 
     <!-- OPS GRID -->
@@ -1093,12 +1148,12 @@ function aggregateJvzoo(all,rangeMeta,dateRange){
    reliably fails, <90 days reliably succeeds). Looping all windows inside
    one Cloudflare Function call also fails — it exceeds Cloudflare's own
    ~60s per-invocation execution limit. So, same fix as JVZoo: the browser
-   calls the proxy once per ~60-day window (each gets a fresh execution
+   calls the proxy once per ~30-day window (each gets a fresh execution
    budget) and aggregates client-side. */
 const EXPL_MNAMES=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
 function explDateStr(d){return `${String(d.getUTCDate()).padStart(2,'0')}-${EXPL_MNAMES[d.getUTCMonth()]}-${d.getUTCFullYear()}`;}
 function explParseDate(s){const[dd,mon,yyyy]=s.split('-');return new Date(Date.UTC(+yyyy,EXPL_MNAMES.indexOf(mon.toLowerCase()),+dd));}
-function explWindows(startStr,endStr,chunkDays=60){
+function explWindows(startStr,endStr,chunkDays=30){
   const start=explParseDate(startStr),end=explParseDate(endStr);
   const windows=[];
   let cur=start;
@@ -1828,40 +1883,61 @@ function drawVeins(){
   svg.setAttribute('width',cont.offsetWidth);svg.setAttribute('height',Math.max(cont.scrollHeight,cont.offsetHeight));
   svg.innerHTML=`<defs><filter id="vg" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="vg2" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
   const pairs=[
-    ['node-root','node-stat-live'],['node-stat-live','node-stat-under'],['node-stat-under','node-bizops'],
-    ['node-root','node-stat-complete'],['node-stat-complete','node-stat-alltime'],['node-stat-alltime','node-nutra'],
+    ['node-stat-alltime','node-bizops'],['node-stat-alltime','node-nutra'],
     ['node-bizops','node-live-bizops'],['node-bizops','node-under-bizops'],
     ['node-nutra','node-live-nutra'],['node-nutra','node-under-nutra'],
   ];
   const cols={
-    'node-root,node-stat-live':'#cc1100','node-stat-live,node-stat-under':'#cc1100','node-stat-under,node-bizops':'#cc1100',
-    'node-root,node-stat-complete':'#008844','node-stat-complete,node-stat-alltime':'#008844','node-stat-alltime,node-nutra':'#008844',
+    'node-stat-alltime,node-bizops':'#cc1100','node-stat-alltime,node-nutra':'#008844',
     'node-bizops,node-live-bizops':'#880000','node-bizops,node-under-bizops':'#882200',
     'node-nutra,node-live-nutra':'#006633','node-nutra,node-under-nutra':'#005522',
+  };
+  const segD=(ar,br)=>{
+    const dx=br.cx-ar.cx,dy=br.cy-ar.cy;let x1,y1,x2,y2,d;
+    if(Math.abs(dy)>=Math.abs(dx)){
+      if(dy>=0){x1=ar.cx;y1=ar.bot-4;x2=br.cx;y2=br.top+4;}else{x1=ar.cx;y1=ar.top+4;x2=br.cx;y2=br.bot-4;}
+      const mid=(y1+y2)/2;d=`${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`;
+    }else{
+      if(dx>=0){x1=ar.cx+ar.w/2-4;y1=ar.cy;x2=br.cx-br.w/2+4;y2=br.cy;}else{x1=ar.cx-ar.w/2+4;y1=ar.cy;x2=br.cx+br.w/2-4;y2=br.cy;}
+      const mid=(x1+x2)/2;d=`${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`;
+    }
+    return{x1,y1,x2,y2,curve:d};
   };
   pairs.forEach(([a,b])=>{
     const ae=document.getElementById(a),be=document.getElementById(b);if(!ae||!be)return;
     const ar=getRC(ae),br=getRC(be);const col=cols[a+','+b]||'#8b0000';
-    const dx=br.cx-ar.cx,dy=br.cy-ar.cy;
-    let x1,y1,x2,y2,d;
-    if(Math.abs(dy)>=Math.abs(dx)){
-      if(dy>=0){x1=ar.cx;y1=ar.bot-4;x2=br.cx;y2=br.top+4;}else{x1=ar.cx;y1=ar.top+4;x2=br.cx;y2=br.bot-4;}
-      const mid=(y1+y2)/2;
-      d=`M ${x1} ${y1} C ${x1} ${mid}, ${x2} ${mid}, ${x2} ${y2}`;
-    }else{
-      if(dx>=0){x1=ar.cx+ar.w/2-4;y1=ar.cy;x2=br.cx-br.w/2+4;y2=br.cy;}else{x1=ar.cx-ar.w/2+4;y1=ar.cy;x2=br.cx+br.w/2-4;y2=br.cy;}
-      const mid=(x1+x2)/2;
-      d=`M ${x1} ${y1} C ${mid} ${y1}, ${mid} ${y2}, ${x2} ${y2}`;
-    }
+    const{x1,y1,x2,y2,curve}=segD(ar,br);
+    const d=`M ${x1} ${y1} C ${curve}`;
     const len=Math.hypot(x2-x1,y2-y1)*1.5;
-    [[col,'#200000',3,'0.8',''],['','',0,'',''],].slice(0,1).forEach(()=>{
-      const base=mkPath(d);base.setAttribute('stroke','#200000');base.setAttribute('stroke-width','3');base.setAttribute('opacity','0.8');svg.appendChild(base);
-    });
+    const base=mkPath(d);base.setAttribute('stroke','#200000');base.setAttribute('stroke-width','3');base.setAttribute('opacity','0.8');svg.appendChild(base);
     const g1=mkPath(d);g1.setAttribute('stroke',col);g1.setAttribute('stroke-width','1.5');g1.setAttribute('filter','url(#vg)');g1.setAttribute('opacity','0.55');svg.appendChild(g1);
     const flow=mkPath(d);flow.setAttribute('stroke',col);flow.setAttribute('stroke-width','2');flow.setAttribute('stroke-dasharray',`${len*.18} ${len*.82}`);flow.setAttribute('filter','url(#vg)');flow.style.animation=`flowVein ${1.8+Math.random()*1.2}s linear infinite`;svg.appendChild(flow);
     const glo=mkPath(d);glo.setAttribute('stroke',col);glo.setAttribute('stroke-width','5');glo.setAttribute('filter','url(#vg2)');glo.setAttribute('opacity','0.15');glo.style.animation=`flowVein ${2+Math.random()}s linear infinite reverse`;svg.appendChild(glo);
     [[x1,y1],[x2,y2]].forEach(([nx,ny])=>{const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');dot.setAttribute('cx',nx);dot.setAttribute('cy',ny);dot.setAttribute('r','4');dot.setAttribute('fill',col);dot.setAttribute('filter','url(#vg)');dot.setAttribute('opacity','0.8');svg.appendChild(dot);});
   });
+
+  /* "Hero" flow — ONE continuous comet sweeping root → live → under →
+     complete → alltime in a single pass, so it visibly hands off
+     box-to-box instead of four independently-phased segments. */
+  const heroIds=['node-root','node-stat-live','node-stat-under','node-stat-complete','node-stat-alltime'];
+  const heroEls=heroIds.map(id=>document.getElementById(id));
+  if(heroEls.every(Boolean)){
+    const pts=heroEls.map(getRC);
+    const firstSeg=segD(pts[0],pts[1]);
+    let heroD=`M ${firstSeg.x1} ${firstSeg.y1}`;
+    let heroLen=0;
+    for(let i=0;i<pts.length-1;i++){
+      const seg=segD(pts[i],pts[i+1]);
+      heroD+=` C ${seg.curve}`;
+      heroLen+=Math.hypot(seg.x2-seg.x1,seg.y2-seg.y1)*1.3;
+    }
+    const col='#ff4400';
+    const hBase=mkPath(heroD);hBase.setAttribute('stroke','#200000');hBase.setAttribute('stroke-width','4');hBase.setAttribute('opacity','0.85');svg.appendChild(hBase);
+    const hG1=mkPath(heroD);hG1.setAttribute('stroke',col);hG1.setAttribute('stroke-width','2');hG1.setAttribute('filter','url(#vg)');hG1.setAttribute('opacity','0.6');svg.appendChild(hG1);
+    const hFlow=mkPath(heroD);hFlow.setAttribute('stroke',col);hFlow.setAttribute('stroke-width','3');hFlow.setAttribute('stroke-dasharray',`${heroLen*.15} ${heroLen*.85}`);hFlow.setAttribute('filter','url(#vg)');hFlow.style.animation='flowVein 4.8s linear infinite';svg.appendChild(hFlow);
+    const hGlo=mkPath(heroD);hGlo.setAttribute('stroke',col);hGlo.setAttribute('stroke-width','8');hGlo.setAttribute('filter','url(#vg2)');hGlo.setAttribute('opacity','0.22');hGlo.style.animation='flowVein 4.8s linear infinite';svg.appendChild(hGlo);
+    pts.slice(1).forEach(p=>{const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');dot.setAttribute('cx',p.cx);dot.setAttribute('cy',p.top);dot.setAttribute('r','5');dot.setAttribute('fill',col);dot.setAttribute('filter','url(#vg)');dot.setAttribute('opacity','0.85');svg.appendChild(dot);});
+  }
 }
 function mkPath(d){const p=document.createElementNS('http://www.w3.org/2000/svg','path');p.setAttribute('d',d);p.setAttribute('fill','none');return p;}
 let vTimer;function scheduleVeins(){clearTimeout(vTimer);vTimer=setTimeout(drawVeins,80);}
