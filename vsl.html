@@ -63,8 +63,20 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 .run-banner{position:relative;z-index:1;background:linear-gradient(135deg,rgba(10,4,4,.97),rgba(18,4,4,.94));border:1px solid rgba(140,0,0,.35);border-radius:10px;padding:16px 28px;margin-bottom:20px;display:flex;align-items:center;gap:16px;overflow:hidden}
 .run-banner::before{content:'';position:absolute;top:0;left:0;right:0;height:1.5px;background:linear-gradient(90deg,transparent,#cc1100,transparent)}
 .run-banner::after{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(120,0,0,.12),transparent 60%);pointer-events:none}
-.run-wolf{width:42px;height:42px;flex-shrink:0;filter:drop-shadow(0 0 10px rgba(200,0,0,.7));animation:hb 3s ease-in-out infinite}
+.run-wolf-wrap{position:relative;flex-shrink:0}
+.run-wolf{display:block;width:64px;height:64px;filter:drop-shadow(0 0 10px rgba(200,0,0,.7));animation:hb 3s ease-in-out infinite}
 @keyframes hb{0%,100%{filter:drop-shadow(0 0 8px rgba(200,0,0,.5))}50%{filter:drop-shadow(0 0 22px rgba(255,0,0,.85))}}
+
+/* Blood dripping from the wolf's tongue */
+.blood-drop{position:absolute;top:87%;left:49%;width:3px;height:6px;background:linear-gradient(180deg,#dd1100,#6a0000);border-radius:50% 50% 50% 50%/65% 65% 35% 35%;opacity:0;pointer-events:none;box-shadow:0 0 4px rgba(220,0,0,.6);animation:bloodDrip 2.6s ease-in infinite}
+.blood-drop.d2{left:52%;animation-delay:.85s}
+.blood-drop.d3{left:50.5%;animation-delay:1.7s}
+@keyframes bloodDrip{
+  0%{transform:translateY(0) scaleY(.5);opacity:0}
+  10%{opacity:1}
+  75%{transform:translateY(26px) scaleY(1.15);opacity:.85}
+  100%{transform:translateY(34px) scaleY(1.3);opacity:0}
+}
 .run-title{font-size:1rem;font-weight:900;letter-spacing:.25em;text-transform:uppercase;background:linear-gradient(to bottom,#ff5533 0%,#dd1100 25%,#880000 50%,#dd1100 75%,#ff5533 100%);background-size:100% 200%;-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;animation:bloodRiver 2s linear infinite}
 @keyframes bloodRiver{from{background-position:0 0%}to{background-position:0 100%}}
 .run-sub{font-size:.65rem;color:rgba(138,150,163,.5);letter-spacing:.15em;margin-left:4px}
@@ -96,6 +108,7 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 .vs-icon{font-size:1.2rem;flex-shrink:0;filter:drop-shadow(0 0 6px rgba(204,17,0,.5));position:relative;z-index:1}
 .vs-info{display:flex;flex-direction:column;gap:1px;position:relative;z-index:1}
 .vs-val{font-size:1.08rem;font-weight:800;color:#f2f2f2;text-shadow:0 0 12px rgba(204,17,0,.3);letter-spacing:.01em}
+.vs-val.green{color:#22dd66;text-shadow:0 0 14px rgba(34,221,102,.45)}
 .vs-label{font-size:.54rem;letter-spacing:.13em;text-transform:uppercase;color:var(--silver);opacity:.8}
 
 /* Wolf watermark, faint, behind the content */
@@ -444,17 +457,20 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 
     <!-- BANNER -->
     <div class="run-banner" id="node-root">
-      <svg class="run-wolf" viewBox="0 0 300 310" xmlns="http://www.w3.org/2000/svg" width="42" height="42">
-        <ellipse cx="150" cy="148" rx="118" ry="108" fill="#440000" opacity="0.18"/>
-        <path d="M 150 44 C 125 44,95 58,78 86 C 62 112,58 144,64 170 C 70 194,84 212,100 220 C 106 223,112 225,120 224 L 128 218 L 150 215 L 172 218 L 180 224 C 188 225,194 223,200 220 C 216 212,230 194,236 170 C 242 144,238 112,222 86 C 205 58,175 44,150 44 Z" fill="#0d0d14"/>
-        <path d="M 85 82 C 78 64,65 28,75 14 C 80 7,90 7,96 16 C 104 27,106 62,107 80 Z" fill="#2d0606"/>
-        <path d="M 215 82 C 222 64,235 28,225 14 C 220 7,210 7,204 16 C 196 27,194 62,193 80 Z" fill="#2d0606"/>
-        <ellipse cx="113" cy="148" rx="23" ry="18" fill="#cc1500"/><ellipse cx="113" cy="148" rx="7" ry="16" fill="#040404"/>
-        <ellipse cx="187" cy="148" rx="23" ry="18" fill="#cc1500"/><ellipse cx="187" cy="148" rx="7" ry="16" fill="#040404"/>
-        <path d="M 110 216 C 112 250,128 272,150 276 C 172 272,188 250,190 216 C 178 208,165 204,150 204 C 135 204,122 208,110 216 Z" fill="#1c0000"/>
-        <path d="M 116 211 L 111 237 L 123 211" fill="#eaeaea"/><path d="M 177 211 L 183 237 L 189 211" fill="#eaeaea"/>
-        <path d="M 126 244 C 124 265,138 280,150 282 C 162 280,176 265,174 244 C 167 234,150 230,133 234 Z" fill="#7a0000"/>
-      </svg>
+      <div class="run-wolf-wrap">
+        <svg class="run-wolf" viewBox="0 0 300 310" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="150" cy="148" rx="118" ry="108" fill="#440000" opacity="0.18"/>
+          <path d="M 150 44 C 125 44,95 58,78 86 C 62 112,58 144,64 170 C 70 194,84 212,100 220 C 106 223,112 225,120 224 L 128 218 L 150 215 L 172 218 L 180 224 C 188 225,194 223,200 220 C 216 212,230 194,236 170 C 242 144,238 112,222 86 C 205 58,175 44,150 44 Z" fill="#0d0d14"/>
+          <path d="M 85 82 C 78 64,65 28,75 14 C 80 7,90 7,96 16 C 104 27,106 62,107 80 Z" fill="#2d0606"/>
+          <path d="M 215 82 C 222 64,235 28,225 14 C 220 7,210 7,204 16 C 196 27,194 62,193 80 Z" fill="#2d0606"/>
+          <ellipse cx="113" cy="148" rx="23" ry="18" fill="#cc1500"/><ellipse cx="113" cy="148" rx="7" ry="16" fill="#040404"/>
+          <ellipse cx="187" cy="148" rx="23" ry="18" fill="#cc1500"/><ellipse cx="187" cy="148" rx="7" ry="16" fill="#040404"/>
+          <path d="M 110 216 C 112 250,128 272,150 276 C 172 272,188 250,190 216 C 178 208,165 204,150 204 C 135 204,122 208,110 216 Z" fill="#1c0000"/>
+          <path d="M 116 211 L 111 237 L 123 211" fill="#eaeaea"/><path d="M 177 211 L 183 237 L 189 211" fill="#eaeaea"/>
+          <path d="M 126 244 C 124 265,138 280,150 282 C 162 280,176 265,174 244 C 167 234,150 230,133 234 Z" fill="#7a0000"/>
+        </svg>
+        <i class="blood-drop d1"></i><i class="blood-drop d2"></i><i class="blood-drop d3"></i>
+      </div>
       <div><div class="run-title">Running Operations — VSL Division</div><div class="run-sub">All active &amp; undergoing operations tracked below</div></div>
       <div class="run-status"><span class="run-pill">Systems Live</span></div>
     </div>
@@ -483,7 +499,7 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
         <svg class="vs-wolf-bg"><use href="#wolf-glyph" width="100%" height="100%"/></svg>
         <i class="vs-crawl"></i>
         <i class="vs-corner tl"></i><i class="vs-corner tr"></i><i class="vs-corner bl"></i><i class="vs-corner br"></i>
-        <span class="vs-icon">💰</span><div class="vs-info"><span class="vs-val" id="stat-alltime">$0</span><span class="vs-label">All-Time Revenue</span></div>
+        <span class="vs-icon">💰</span><div class="vs-info"><span class="vs-val green" id="stat-alltime">$0</span><span class="vs-label">All-Time Revenue</span></div>
       </div>
     </div>
 
@@ -1883,11 +1899,15 @@ function drawVeins(){
   svg.setAttribute('width',cont.offsetWidth);svg.setAttribute('height',Math.max(cont.scrollHeight,cont.offsetHeight));
   svg.innerHTML=`<defs><filter id="vg" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="vg2" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
   const pairs=[
+    ['node-root','node-stat-live'],['node-stat-live','node-stat-under'],
+    ['node-stat-under','node-stat-complete'],['node-stat-complete','node-stat-alltime'],
     ['node-stat-alltime','node-bizops'],['node-stat-alltime','node-nutra'],
     ['node-bizops','node-live-bizops'],['node-bizops','node-under-bizops'],
     ['node-nutra','node-live-nutra'],['node-nutra','node-under-nutra'],
   ];
   const cols={
+    'node-root,node-stat-live':'#cc1100','node-stat-live,node-stat-under':'#cc1100',
+    'node-stat-under,node-stat-complete':'#cc1100','node-stat-complete,node-stat-alltime':'#cc1100',
     'node-stat-alltime,node-bizops':'#cc1100','node-stat-alltime,node-nutra':'#008844',
     'node-bizops,node-live-bizops':'#880000','node-bizops,node-under-bizops':'#882200',
     'node-nutra,node-live-nutra':'#006633','node-nutra,node-under-nutra':'#005522',
@@ -1915,29 +1935,6 @@ function drawVeins(){
     const glo=mkPath(d);glo.setAttribute('stroke',col);glo.setAttribute('stroke-width','5');glo.setAttribute('filter','url(#vg2)');glo.setAttribute('opacity','0.15');glo.style.animation=`flowVein ${2+Math.random()}s linear infinite reverse`;svg.appendChild(glo);
     [[x1,y1],[x2,y2]].forEach(([nx,ny])=>{const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');dot.setAttribute('cx',nx);dot.setAttribute('cy',ny);dot.setAttribute('r','4');dot.setAttribute('fill',col);dot.setAttribute('filter','url(#vg)');dot.setAttribute('opacity','0.8');svg.appendChild(dot);});
   });
-
-  /* "Hero" flow — ONE continuous comet sweeping root → live → under →
-     complete → alltime in a single pass, so it visibly hands off
-     box-to-box instead of four independently-phased segments. */
-  const heroIds=['node-root','node-stat-live','node-stat-under','node-stat-complete','node-stat-alltime'];
-  const heroEls=heroIds.map(id=>document.getElementById(id));
-  if(heroEls.every(Boolean)){
-    const pts=heroEls.map(getRC);
-    const firstSeg=segD(pts[0],pts[1]);
-    let heroD=`M ${firstSeg.x1} ${firstSeg.y1}`;
-    let heroLen=0;
-    for(let i=0;i<pts.length-1;i++){
-      const seg=segD(pts[i],pts[i+1]);
-      heroD+=` C ${seg.curve}`;
-      heroLen+=Math.hypot(seg.x2-seg.x1,seg.y2-seg.y1)*1.3;
-    }
-    const col='#ff4400';
-    const hBase=mkPath(heroD);hBase.setAttribute('stroke','#200000');hBase.setAttribute('stroke-width','4');hBase.setAttribute('opacity','0.85');svg.appendChild(hBase);
-    const hG1=mkPath(heroD);hG1.setAttribute('stroke',col);hG1.setAttribute('stroke-width','2');hG1.setAttribute('filter','url(#vg)');hG1.setAttribute('opacity','0.6');svg.appendChild(hG1);
-    const hFlow=mkPath(heroD);hFlow.setAttribute('stroke',col);hFlow.setAttribute('stroke-width','3');hFlow.setAttribute('stroke-dasharray',`${heroLen*.15} ${heroLen*.85}`);hFlow.setAttribute('filter','url(#vg)');hFlow.style.animation='flowVein 4.8s linear infinite';svg.appendChild(hFlow);
-    const hGlo=mkPath(heroD);hGlo.setAttribute('stroke',col);hGlo.setAttribute('stroke-width','8');hGlo.setAttribute('filter','url(#vg2)');hGlo.setAttribute('opacity','0.22');hGlo.style.animation='flowVein 4.8s linear infinite';svg.appendChild(hGlo);
-    pts.slice(1).forEach(p=>{const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');dot.setAttribute('cx',p.cx);dot.setAttribute('cy',p.top);dot.setAttribute('r','5');dot.setAttribute('fill',col);dot.setAttribute('filter','url(#vg)');dot.setAttribute('opacity','0.85');svg.appendChild(dot);});
-  }
 }
 function mkPath(d){const p=document.createElementNS('http://www.w3.org/2000/svg','path');p.setAttribute('d',d);p.setAttribute('fill','none');return p;}
 let vTimer;function scheduleVeins(){clearTimeout(vTimer);vTimer=setTimeout(drawVeins,80);}
