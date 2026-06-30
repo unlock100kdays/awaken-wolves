@@ -2099,19 +2099,25 @@ function dragAfterElement(list,y){
     return closest;
   },{offset:-Infinity,element:null}).element;
 }
+let dragArmed=null;
 function setupDragReorder(){
   document.querySelectorAll('.sub-body').forEach(list=>{
-    list.addEventListener('dragstart',e=>{
+    list.addEventListener('mousedown',e=>{
       const handle=e.target.closest('.drag-handle');
-      const item=handle&&handle.closest('.offer-group,.project-card');
-      if(!item){e.preventDefault();return;}
-      item.classList.add('dragging');
+      dragArmed=handle?handle.closest('.offer-group,.project-card'):null;
+    });
+    list.addEventListener('dragstart',e=>{
+      /* dragstart's e.target is the draggable ancestor itself, not the
+         handle the mouse went down on — so we arm via mousedown instead. */
+      if(e.target!==dragArmed){e.preventDefault();return;}
+      e.target.classList.add('dragging');
       e.dataTransfer.effectAllowed='move';
       e.dataTransfer.setData('text/plain','');
     });
     list.addEventListener('dragend',e=>{
       const item=list.querySelector('.dragging');
       if(item)item.classList.remove('dragging');
+      dragArmed=null;
       saveState();
     });
     list.addEventListener('dragover',e=>{
