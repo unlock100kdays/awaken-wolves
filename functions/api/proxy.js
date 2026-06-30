@@ -21,7 +21,7 @@ export async function onRequestPost({ request }) {
     if (!platform || !apiKey) return json({ success: false, error: 'Missing platform or apiKey' }, 400);
     let result;
     switch (platform) {
-      case 'Explodely': result = await explodely(username, apiKey, action, body.startdate, body.enddate); break;
+      case 'Explodely': result = await explodely(username, apiKey, action); break;
       case 'JVzoo':     result = await jvzoo(username, apiKey, action, offerId, dateRange, pageOffset, pageLimit); break;
       case 'Clickbank': result = await clickbank(apiKey, apiSecret, action, offerId); break;
       case 'Cartpanda': result = await cartpanda(apiKey, action, offerId); break;
@@ -136,18 +136,54 @@ async function explFetch(username, apiKey, startdate, enddate) {
   return Array.isArray(arr) ? arr : [];
 }
 
-async function explodely(username, apiKey, action, startdate, enddate) {
-  if (action === 'debugRaw') {
-    const q = new URLSearchParams({ username, apikey: apiKey, apiaction: 'getsalebyget', startdate: startdate || '01-jan-2024', enddate: enddate || tomorrow() });
-    const r = await fetch(`https://api.explodely.com/v1/sale?${q}`, {
-      headers: { Accept: 'application/json', 'User-Agent': 'CloudflareWorker/1.0' },
-    });
-    const text = await r.text();
-    const headers = {};
-    for (const [k, v] of r.headers.entries()) headers[k] = v;
-    return { success: true, status: r.status, headers, bodyLen: text.length, bodySnippet: text.slice(0, 500) };
+function parseExDate(s) {
+  const [dd, mon, yyyy] = s.split('-');
+  return new Date(Date.UTC(parseInt(yyyy, 10), MNAMES.indexOf(mon.toLowerCase()), parseInt(dd, 10)));
+}
+function addDays(d, n) { return new Date(d.getTime() + n * 86400000); }
+
+/* Explodely's backend returns an empty HTTP 500 when a single query spans too
+   much data (confirmed: >90 days reliably fails on a 46k-sale account, <90 days
+   reliably succeeds). Fetch in ~60-day windows sequentially and concatenate,
+   retrying each window once on failure — mirrors the JVZoo chunking fix. */
+async function explFetchChunked(username, apiKey, startStr, endStr, chunkDays = 60) {
+  const start = parseExDate(startStr);
+  const end   = parseExDate(endStr);
+
+  const windows = [];
+  let cur = start;
+  while (cur <= end) {
+    const winEnd = new Date(Math.min(addDays(cur, chunkDays).getTime(), end.getTime()));
+    windows.push([exDate(cur), exDate(winEnd)]);
+    cur = addDays(winEnd, 1);
   }
 
+  let all = [];
+  let failedWindows = 0;
+  for (const [s, e] of windows) {
+    let data = null;
+    try {
+      data = await explFetch(username, apiKey, s, e);
+    } catch {
+      await new Promise(r => setTimeout(r, 800));
+      try { data = await explFetch(username, apiKey, s, e); }
+      catch { failedWindows++; data = []; }
+    }
+    all = all.concat(data);
+  }
+
+  const seen = new Set();
+  const deduped = all.filter(s => {
+    const id = s.orderid || JSON.stringify(s);
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+
+  return { sales: deduped, failedWindows, totalWindows: windows.length };
+}
+
+async function explodely(username, apiKey, action) {
   /* fetchOffers — Explodely has no product listing endpoint.
      Just verify auth then let the frontend prompt for a name. */
   if (action === 'fetchOffers') {
@@ -161,12 +197,16 @@ async function explodely(username, apiKey, action, startdate, enddate) {
   }
 
   if (action === 'fetchStats') {
-    /* Single clean request — 01-jan-2024 to tomorrow.
-       No extra params, no pagination, no year splitting — exactly the same
-       call structure that was working before. */
+    /* 01-jan-2024 to tomorrow, fetched in chunks (see explFetchChunked) since
+       a single request over this account's full history times out Explodely's
+       backend. */
     let all = [];
+    let failedWindows = 0, totalWindows = 0;
     try {
-      all = await explFetch(username, apiKey, '01-jan-2024', tomorrow());
+      const r = await explFetchChunked(username, apiKey, '01-jan-2024', tomorrow());
+      all = r.sales;
+      failedWindows = r.failedWindows;
+      totalWindows = r.totalWindows;
     } catch (e) {
       return { success: false, error: e.message };
     }
@@ -355,6 +395,9 @@ async function explodely(username, apiKey, action, startdate, enddate) {
         top_countries:      topCountries,
         recent_transactions: recentTxns,
       },
+      note: failedWindows > 0
+        ? `${failedWindows}/${totalWindows} date windows failed to load from Explodely — totals may be incomplete`
+        : undefined,
       _sample: all[0] || null,
       _counts: { total: all.length, today: todaySales.length, week7: week7Sales.length, perYear: perYearCounts },
     };
