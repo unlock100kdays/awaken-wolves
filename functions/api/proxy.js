@@ -21,7 +21,7 @@ export async function onRequestPost({ request }) {
     if (!platform || !apiKey) return json({ success: false, error: 'Missing platform or apiKey' }, 400);
     let result;
     switch (platform) {
-      case 'Explodely': result = await explodely(username, apiKey, action); break;
+      case 'Explodely': result = await explodely(username, apiKey, action, body.startdate, body.enddate); break;
       case 'JVzoo':     result = await jvzoo(username, apiKey, action, offerId, dateRange, pageOffset, pageLimit); break;
       case 'Clickbank': result = await clickbank(apiKey, apiSecret, action, offerId); break;
       case 'Cartpanda': result = await cartpanda(apiKey, action, offerId); break;
@@ -47,46 +47,6 @@ function today()    { return exDate(new Date()); }
 function tomorrow() { return exDate(new Date(Date.now() + 86400000)); }
 function daysAgo(n) { return exDate(new Date(Date.now() - n * 86400000)); }
 
-/* Parse saletimedate → Unix timestamp (seconds).
-   Handles multiple formats the API may return:
-     ISO:      "2026-06-29"  or  "2026-06-29T14:30:00"
-     IPN docs: "14:30:00 29-JUN-2026"  or  "29-JUN-2026 14:30:00"
-   Always prefers saletimestamp (Unix) when present and non-zero. */
-function saleTs(s) {
-  if (s.saletimestamp) {
-    const ts = parseInt(s.saletimestamp);
-    if (ts > 0) return ts;
-  }
-  const raw = (s.saletimedate || '').trim();
-  if (!raw) return 0;
-
-  /* ISO format: YYYY-MM-DD or YYYY-MM-DDTHH:MM:SS */
-  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) {
-    return Math.floor(new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3])).getTime() / 1000);
-  }
-
-  /* IPN format: "HH:MM:SS DD-MMM-YYYY" or "DD-MMM-YYYY HH:MM:SS" */
-  const parts = raw.split(/\s+/);
-  /* Pick the part that looks like DD-MMM-YYYY (has two dashes, not all digits) */
-  const datePart = parts.find(p => /^[0-3]\d-[A-Za-z]{3}-\d{4}$/.test(p));
-  if (datePart) {
-    const [d, m, y] = datePart.split('-');
-    const monthIdx = MNAMES.indexOf(m.toLowerCase());
-    if (monthIdx !== -1) {
-      return Math.floor(new Date(Date.UTC(+y, monthIdx, +d)).getTime() / 1000);
-    }
-  }
-  return 0;
-}
-
-/* Format a saletimedate value for display — strips time, normalises to DD-MMM-YYYY */
-function fmtSaleDate(raw) {
-  if (!raw) return '';
-  const iso = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return `${iso[3]}-${MNAMES[+iso[2]-1].toUpperCase()}-${iso[1]}`;
-  return raw.replace(/^\d\d:\d\d:\d\d /, '').replace(/ \d\d:\d\d:\d\d$/, '');
-}
 
 /* ─── EXPLODELY ──────────────────────────────────────────────────────────────
    Real endpoint: https://api.explodely.com/v1/sale
@@ -136,61 +96,7 @@ async function explFetch(username, apiKey, startdate, enddate) {
   return Array.isArray(arr) ? arr : [];
 }
 
-function parseExDate(s) {
-  const [dd, mon, yyyy] = s.split('-');
-  return new Date(Date.UTC(parseInt(yyyy, 10), MNAMES.indexOf(mon.toLowerCase()), parseInt(dd, 10)));
-}
-function addDays(d, n) { return new Date(d.getTime() + n * 86400000); }
-
-/* Explodely's backend returns an empty HTTP 500 when a single query spans too
-   much data (confirmed: >90 days reliably fails on a 46k-sale account, <90 days
-   reliably succeeds). Fetch in ~60-day windows, in small parallel batches
-   (well under the ~50-subrequest Cloudflare cap) so the whole call finishes
-   before the Function's own execution time limit — a fully sequential version
-   of this took >60s for 2.5 years of windows and got killed mid-request. */
-async function explFetchChunked(username, apiKey, startStr, endStr, chunkDays = 60, concurrency = 5) {
-  const start = parseExDate(startStr);
-  const end   = parseExDate(endStr);
-
-  const windows = [];
-  let cur = start;
-  while (cur <= end) {
-    const winEnd = new Date(Math.min(addDays(cur, chunkDays).getTime(), end.getTime()));
-    windows.push([exDate(cur), exDate(winEnd)]);
-    cur = addDays(winEnd, 1);
-  }
-
-  const fetchOne = async ([s, e]) => {
-    try { return await explFetch(username, apiKey, s, e); }
-    catch {
-      try { return await explFetch(username, apiKey, s, e); }
-      catch { return null; }
-    }
-  };
-
-  let all = [];
-  let failedWindows = 0;
-  for (let i = 0; i < windows.length; i += concurrency) {
-    const batch = windows.slice(i, i + concurrency);
-    const results = await Promise.all(batch.map(fetchOne));
-    results.forEach(data => {
-      if (data === null) failedWindows++;
-      else all = all.concat(data);
-    });
-  }
-
-  const seen = new Set();
-  const deduped = all.filter(s => {
-    const id = s.orderid || JSON.stringify(s);
-    if (seen.has(id)) return false;
-    seen.add(id);
-    return true;
-  });
-
-  return { sales: deduped, failedWindows, totalWindows: windows.length };
-}
-
-async function explodely(username, apiKey, action) {
+async function explodely(username, apiKey, action, startdate, enddate) {
   /* fetchOffers — Explodely has no product listing endpoint.
      Just verify auth then let the frontend prompt for a name. */
   if (action === 'fetchOffers') {
@@ -203,211 +109,19 @@ async function explodely(username, apiKey, action) {
     return { success: true, offers: [], note: "Credentials saved — enter your offer name to pull sales data" };
   }
 
-  if (action === 'fetchStats') {
-    /* 01-jan-2024 to tomorrow, fetched in chunks (see explFetchChunked) since
-       a single request over this account's full history times out Explodely's
-       backend. */
-    let all = [];
-    let failedWindows = 0, totalWindows = 0;
+  /* fetchExplChunk — single date-range window. The frontend loops this across
+     ~60-day windows and aggregates client-side (apiFetchExplodelyStats in
+     vsl.html). A single multi-year request times out Explodely's own backend
+     (confirmed: >90 days reliably fails, <90 days reliably succeeds), and
+     looping all windows server-side exceeds Cloudflare's own per-invocation
+     execution limit (~60s) — same constraint that forced JVZoo's chunking. */
+  if (action === 'fetchExplChunk') {
     try {
-      const r = await explFetchChunked(username, apiKey, '01-jan-2024', tomorrow());
-      all = r.sales;
-      failedWindows = r.failedWindows;
-      totalWindows = r.totalWindows;
+      const sales = await explFetch(username, apiKey, startdate, enddate);
+      return { success: true, sales };
     } catch (e) {
       return { success: false, error: e.message };
     }
-
-    if (all.length === 0) {
-      return { success: false, error: 'Explodely returned 0 sales for 2024–today. Check credentials.' };
-    }
-
-    const perYearCounts = {};
-
-    /* UTC midnight boundaries for filtering */
-    const utcMidnight = (daysBack) => {
-      const d = new Date();
-      d.setUTCHours(0, 0, 0, 0);
-      return Math.floor(d.getTime() / 1000) - daysBack * 86400;
-    };
-    const midToday = utcMidnight(0);
-    const midYest  = utcMidnight(1);
-    const mid7     = utcMidnight(7);
-    const mid30    = utcMidnight(30);
-
-    const filter = (min, max) => all.filter(s => {
-      const ts = saleTs(s);
-      return ts >= min && (max == null || ts < max);
-    });
-
-    const todaySales  = filter(midToday, null);
-    const yestSales   = filter(midYest,  midToday);
-    const week7Sales  = filter(mid7,     null);
-    const week30Sales = filter(mid30,    null);
-    /* All-time = everything fetched (up to 2 years) */
-    const allSales    = all;
-
-    function rev(arr) {
-      return arr.reduce((sum, s) => {
-        const amt = parseFloat(s.amount || 0) || 0;
-        const t   = String(s.type || '').toLowerCase();
-        return (t === 'refund' || t === 'chargeback') ? sum - amt : sum + amt;
-      }, 0);
-    }
-    function salesOnly(arr) { return arr.filter(s => { const t = String(s.type||'').toLowerCase(); return !t||t==='sale'||t==='rebill'||t==='new_sale'; }); }
-    function refundsOnly(arr) { return arr.filter(s => String(s.type||'').toLowerCase()==='refund'); }
-    function cbOnly(arr) { return arr.filter(s => String(s.type||'').toLowerCase()==='chargeback'); }
-
-    const totalOrds  = salesOnly(allSales).length;
-    const totalRefs  = refundsOnly(allSales).length;
-    const totalCBs   = cbOnly(allSales).length;
-    const totalRev   = rev(allSales);
-    const refRate    = totalOrds > 0 ? totalRefs / totalOrds * 100 : 0;
-    const cbRate     = totalOrds > 0 ? totalCBs  / totalOrds * 100 : 0;
-    const avgOV      = totalOrds > 0 ? totalRev  / totalOrds : 0;
-    const totalVat   = allSales.reduce((s, x) => s + (parseFloat(x.vat||0)||0), 0);
-    const obumps     = allSales.filter(s => s.obselected === 'yes').length;
-    const obumpRate  = totalOrds > 0 ? obumps / totalOrds * 100 : 0;
-    const directRev  = rev(allSales.filter(s => !(s.affiliate||'').trim()));
-    const affRev     = rev(allSales.filter(s =>  (s.affiliate||'').trim()));
-    const rebillRev  = rev(allSales.filter(s => s.rebill === 'yes'));
-
-    /* Last sale (most recent timestamp) */
-    const sorted     = [...allSales].sort((a,b) => saleTs(b) - saleTs(a));
-    const lastSale   = sorted[0]?.saletimedate || '';
-
-    /* Unique customers */
-    const uniqueEmails = new Set(allSales.map(s => (s.customerEmail||'').toLowerCase().trim()).filter(Boolean));
-    const uniqueCustomers = uniqueEmails.size;
-    const customerLtv = uniqueCustomers > 0 ? totalRev / uniqueCustomers : 0;
-
-    /* Refund & chargeback dollar amounts */
-    const refundAmount = refundsOnly(allSales).reduce((s,x) => s + (parseFloat(x.amount||0)||0), 0);
-    const cbAmount     = cbOnly(allSales).reduce((s,x) => s + (parseFloat(x.amount||0)||0), 0);
-    const netRevenue   = totalRev - totalVat;
-
-    /* Top affiliates */
-    const affMap = {};
-    allSales.forEach(s => {
-      const name = (s.affiliate || '').trim(); if (!name) return;
-      const amt  = parseFloat(s.amount||0)||0;
-      const t    = String(s.type||'').toLowerCase();
-      if (!affMap[name]) affMap[name] = { name, revenue: 0, sales: 0 };
-      if (t === 'refund') affMap[name].revenue -= amt;
-      else { affMap[name].revenue += amt; affMap[name].sales++; }
-    });
-    const affiliates = Object.values(affMap)
-      .filter(a => a.revenue > 0).sort((a,b) => b.revenue - a.revenue).slice(0,10)
-      .map((a,i) => ({ rank:i+1, name:a.name, revenue:a.revenue, sales:a.sales, epc: a.sales?a.revenue/a.sales:0 }));
-
-    /* Top countries */
-    const ctryMap = {};
-    salesOnly(allSales).forEach(s => {
-      const c = (s.country||'Unknown').toUpperCase();
-      if (!ctryMap[c]) ctryMap[c] = { code:c, count:0, revenue:0 };
-      ctryMap[c].count++; ctryMap[c].revenue += parseFloat(s.amount||0)||0;
-    });
-    const topCountries = Object.values(ctryMap).sort((a,b)=>b.count-a.count).slice(0,8);
-
-    /* Products / Funnels — net revenue per product with full metrics */
-    const prodMap = {};
-    allSales.forEach(s => {
-      const pid   = s.productId   || '_unknown';
-      const pname = s.productName || s.productId || 'Unknown';
-      const t     = String(s.type || '').toLowerCase();
-      const amt   = parseFloat(s.amount || 0) || 0;
-      const ts    = saleTs(s);
-
-      if (!prodMap[pid]) prodMap[pid] = {
-        id: pid, name: pname,
-        revenue: 0, orders: 0,
-        refunds: 0, refundAmount: 0,
-        chargebacks: 0, cbAmount: 0,
-        today: 0, week7: 0, week30: 0,
-      };
-      const p = prodMap[pid];
-
-      if (t === 'refund') {
-        p.revenue      -= amt;
-        p.refunds++;
-        p.refundAmount += amt;
-      } else if (t === 'chargeback') {
-        p.revenue      -= amt;
-        p.chargebacks++;
-        p.cbAmount     += amt;
-      } else {
-        p.revenue += amt;
-        p.orders++;
-        if (ts >= midToday) p.today  += amt;
-        if (ts >= mid7)     p.week7  += amt;
-        if (ts >= mid30)    p.week30 += amt;
-      }
-    });
-    const topProducts = Object.values(prodMap)
-      .filter(p => p.orders > 0)
-      .sort((a, b) => b.revenue - a.revenue)
-      .map(p => ({
-        ...p,
-        aov:        p.orders > 0 ? p.revenue / p.orders : 0,
-        refundRate: p.orders > 0 ? p.refunds / p.orders * 100 : 0,
-        cbRate:     p.orders > 0 ? p.chargebacks / p.orders * 100 : 0,
-      }));
-
-    /* Recent 20 transactions */
-    const recentTxns = sorted.slice(0,20).map(s => ({
-      orderId:   s.orderid      || '—',
-      type:      String(s.type  || 'sale').toLowerCase(),
-      product:   s.productName  || s.productId || '—',
-      customer:  s.customerName || s.customerEmail || '—',
-      affiliate: s.affiliate    || '',
-      amount:    parseFloat(s.amount||0)||0,
-      vat:       parseFloat(s.vat||0)||0,
-      country:   (s.country||'').toUpperCase(),
-      date:      s.saletimedate || '',
-      obump:     s.obselected   === 'yes',
-      rebill:    s.rebill       === 'yes',
-    }));
-
-    /* Format last sale date neatly */
-    const lastSaleFmt = fmtSaleDate(sorted[0]?.saletimedate || '');
-
-    return {
-      success: true,
-      raw: {
-        total_revenue:      totalRev,
-        net_revenue:        netRevenue,
-        today_revenue:      rev(todaySales),
-        yesterday_revenue:  rev(yestSales),
-        revenue_7_days:     rev(week7Sales),
-        revenue_30_days:    rev(week30Sales),
-        total_orders:       totalOrds,
-        unique_customers:   uniqueCustomers,
-        avg_order_value:    avgOV,
-        customer_ltv:       customerLtv,
-        refund_rate:        refRate,
-        chargeback_rate:    cbRate,
-        total_refunds:      totalRefs,
-        refund_amount:      refundAmount,
-        total_chargebacks:  totalCBs,
-        chargeback_amount:  cbAmount,
-        total_vat:          totalVat,
-        direct_revenue:     directRev,
-        affiliate_revenue:  affRev,
-        rebill_revenue:     rebillRev,
-        order_bump_rate:    obumpRate,
-        order_bump_count:   obumps,
-        last_sale_date:     lastSaleFmt,
-        affiliates,
-        top_products:       topProducts,
-        top_countries:      topCountries,
-        recent_transactions: recentTxns,
-      },
-      note: failedWindows > 0
-        ? `${failedWindows}/${totalWindows} date windows failed to load from Explodely — totals may be incomplete`
-        : undefined,
-      _sample: all[0] || null,
-      _counts: { total: all.length, today: todaySales.length, week7: week7Sales.length, perYear: perYearCounts },
-    };
   }
 
   return { success: false, error: 'Unknown action' };
