@@ -401,11 +401,14 @@ async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth')
     const all  = [];
     const seen = new Set();
 
-    const fetchPage = async (pageIdx) => {
+    const fetchPage = async (pageIdx, retries = 2) => {
       try {
         const q = new URLSearchParams({ start_date: rangeStart, end_date: rangeEnd, page_index: String(pageIdx) });
         const r = await fetch(`https://api.jvzoo.com/v3.0/transactions?${q}`, { headers: h });
-        if (!r.ok) return null;
+        if (!r.ok) {
+          if (retries > 0) { await new Promise(res => setTimeout(res, 500)); return fetchPage(pageIdx, retries - 1); }
+          return null;
+        }
         const d = await r.json().catch(() => null);
         if (!d) return null;
         const tx      = Array.isArray(d?.results) ? d.results : [];
@@ -415,7 +418,10 @@ async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth')
         const pageSize = pag.page_size ?? 50;
         const lastPage = total !== null ? Math.ceil(total / pageSize) - 1 : null;
         return { tx, hasMore, lastPage };
-      } catch { return null; }
+      } catch (e) {
+        if (retries > 0) { await new Promise(res => setTimeout(res, 500)); return fetchPage(pageIdx, retries - 1); }
+        return null;
+      }
     };
 
     const addTx = (txList) => {
@@ -430,7 +436,7 @@ async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth')
 
     if (first?.hasMore) {
       const MAX   = first.lastPage ?? 500;
-      const CONC  = 3;
+      const CONC  = 2;
       for (let p = 1; p <= MAX; p += CONC) {
         const batch = [];
         for (let pp = p; pp <= Math.min(p + CONC - 1, MAX); pp++) batch.push(pp);
@@ -446,13 +452,19 @@ async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth')
     }
 
     /* ── Aggregate stats ── */
-    let gross = 0, sellerGross = 0, refundAmt = 0, cbAmt = 0, totalFees = 0;
+    /* netKept = sum of COMPLETED amounts (= JVZoo "Net Earnings")
+       refundAmt/cbAmt = only count if original sale was in this period (filter by sale_date)
+       gross (JVZoo "Earnings") = netKept + in-period refundAmt + in-period cbAmt */
+    let netKept = 0, sellerGross = 0, refundAmt = 0, cbAmt = 0, totalFees = 0;
     let orders = 0, refunds = 0, cbs = 0;
     let lastSaleTs = 0;
     const emails  = new Set();
     const prodMap = {};
     const affMap  = {};
     const recentTx = [];
+
+    const rangeSt = new Date(rangeStart);
+    const rangeEn = new Date(rangeEnd);
 
     all.sort((a, b) => new Date(b.sale_date||0) - new Date(a.sale_date||0));
 
@@ -465,8 +477,14 @@ async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth')
       const isCB      = status.includes('CHARG') || status.includes('DISPUT') || status.includes('CGBK');
       const isSale    = !isRef && !isCB;
 
-      let ts = 0;
-      if (tx.sale_date) { const d = new Date(tx.sale_date); if (!isNaN(d)) ts = Math.floor(d.getTime() / 1000); }
+      /* For REFUNDED/CB: skip if original sale_date is outside the queried period.
+         JVZoo's Report only counts refunds of THIS period's sales; the API returns
+         all refunds PROCESSED in this period (including prior-month sales). */
+      let txDate = null;
+      if (tx.sale_date) { const d = new Date(tx.sale_date); if (!isNaN(d)) txDate = d; }
+      const inPeriod = !txDate || (txDate >= rangeSt && txDate < rangeEn);
+
+      let ts = txDate ? Math.floor(txDate.getTime() / 1000) : 0;
 
       const cust    = tx.customer ?? {};
       const email   = (cust.email ?? '').toLowerCase();
@@ -481,23 +499,23 @@ async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth')
       if (email) emails.add(email);
 
       if (isSale) {
-        gross += amt; sellerGross += sellerNet; orders++; totalFees += jvzFee;
+        netKept += amt; sellerGross += sellerNet; orders++; totalFees += jvzFee;
         if (ts > lastSaleTs) lastSaleTs = ts;
-      } else if (isRef) { refundAmt += amt; refunds++; }
-        else if (isCB)  { cbAmt     += amt; cbs++;     }
+      } else if (isRef && inPeriod) { refundAmt += amt; refunds++; }
+        else if (isCB  && inPeriod) { cbAmt     += amt; cbs++;     }
 
       if (!prodMap[pid]) prodMap[pid] = { id:pid, name:pname, revenue:0, orders:0, refunds:0, chargebacks:0 };
       const p = prodMap[pid];
-      if      (isRef) { p.revenue -= amt; p.refunds++; }
-      else if (isCB)  { p.revenue -= amt; p.chargebacks++; }
-      else            { p.revenue += amt; p.orders++; }
+      if      (isRef && inPeriod) { p.revenue -= amt; p.refunds++; }
+      else if (isCB  && inPeriod) { p.revenue -= amt; p.chargebacks++; }
+      else if (isSale)            { p.revenue += amt; p.orders++; }
 
       if (affId) {
         if (!affMap[affId]) affMap[affId] = { id:affId, name:affName||affId, sales:0, revenue:0 };
         if (isSale) { affMap[affId].sales++; affMap[affId].revenue += amt; }
       }
 
-      if (recentTx.length < 25) {
+      if (recentTx.length < 25 && (isSale || inPeriod)) {
         recentTx.push({
           date: ts ? new Date(ts*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '',
           type: isRef ? 'refund' : isCB ? 'chargeback' : 'sale',
@@ -508,7 +526,12 @@ async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth')
       }
     }
 
-    const netEarnings = gross - refundAmt - cbAmt;
+    /* JVZoo "Earnings" = gross including refunded/disputed amounts (money that came in)
+       JVZoo "Net Earnings" = what the seller kept = COMPLETED amounts only = netKept */
+    const gross       = netKept + refundAmt + cbAmt;
+    const netEarnings = netKept;
+    const totalSales  = orders + refunds + cbs; /* JVZoo "Sales" = all in-period transactions */
+
     const prods = Object.values(prodMap)
       .sort((a, b) => b.revenue - a.revenue)
       .map(p => ({ ...p,
@@ -528,18 +551,18 @@ async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth')
       success: true,
       raw: {
         /* JVZoo report columns (matches their Report Center table) */
-        jvz_sales:           orders,
+        jvz_sales:           totalSales,
         jvz_earnings:        gross,
         jvz_net_earnings:    netEarnings,
-        jvz_asv:             orders > 0 ? gross / orders : 0,
-        jvz_aov:             orders > 0 ? gross / orders : 0,
-        jvz_refund_pct:      orders > 0 ? refunds / orders * 100 : 0,
+        jvz_asv:             totalSales > 0 ? gross / totalSales : 0,
+        jvz_aov:             orders > 0 ? netKept / orders : 0,
+        jvz_refund_pct:      totalSales > 0 ? refunds / totalSales * 100 : 0,
         jvz_refund_amt_pct:  gross  > 0 ? refundAmt / gross * 100 : 0,
         jvz_refunds:         refunds,
         jvz_refund_dollars:  refundAmt,
         jvz_disputes:        cbs,
         jvz_disputes_dollars: cbAmt,
-        jvz_disputes_pct:    orders > 0 ? cbs / orders * 100 : 0,
+        jvz_disputes_pct:    totalSales > 0 ? cbs / totalSales * 100 : 0,
         /* Context */
         date_range:          dateRange,
         range_label:         rangeLabel,
@@ -550,11 +573,11 @@ async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth')
         net_revenue:         netEarnings,
         total_orders:        orders,
         unique_customers:    emails.size,
-        avg_order_value:     orders > 0 ? gross / orders : 0,
-        refund_rate:         orders > 0 ? refunds / orders * 100 : 0,
+        avg_order_value:     orders > 0 ? netKept / orders : 0,
+        refund_rate:         totalSales > 0 ? refunds / totalSales * 100 : 0,
         refund_amount:       refundAmt,
         total_refunds:       refunds,
-        chargeback_rate:     orders > 0 ? cbs / orders * 100 : 0,
+        chargeback_rate:     totalSales > 0 ? cbs / totalSales * 100 : 0,
         chargeback_amount:   cbAmt,
         total_chargebacks:   cbs,
         total_platform_fees: totalFees || undefined,
