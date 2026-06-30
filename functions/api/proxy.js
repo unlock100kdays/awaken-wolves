@@ -144,9 +144,11 @@ function addDays(d, n) { return new Date(d.getTime() + n * 86400000); }
 
 /* Explodely's backend returns an empty HTTP 500 when a single query spans too
    much data (confirmed: >90 days reliably fails on a 46k-sale account, <90 days
-   reliably succeeds). Fetch in ~60-day windows sequentially and concatenate,
-   retrying each window once on failure — mirrors the JVZoo chunking fix. */
-async function explFetchChunked(username, apiKey, startStr, endStr, chunkDays = 60) {
+   reliably succeeds). Fetch in ~60-day windows, in small parallel batches
+   (well under the ~50-subrequest Cloudflare cap) so the whole call finishes
+   before the Function's own execution time limit — a fully sequential version
+   of this took >60s for 2.5 years of windows and got killed mid-request. */
+async function explFetchChunked(username, apiKey, startStr, endStr, chunkDays = 60, concurrency = 5) {
   const start = parseExDate(startStr);
   const end   = parseExDate(endStr);
 
@@ -158,18 +160,23 @@ async function explFetchChunked(username, apiKey, startStr, endStr, chunkDays = 
     cur = addDays(winEnd, 1);
   }
 
+  const fetchOne = async ([s, e]) => {
+    try { return await explFetch(username, apiKey, s, e); }
+    catch {
+      try { return await explFetch(username, apiKey, s, e); }
+      catch { return null; }
+    }
+  };
+
   let all = [];
   let failedWindows = 0;
-  for (const [s, e] of windows) {
-    let data = null;
-    try {
-      data = await explFetch(username, apiKey, s, e);
-    } catch {
-      await new Promise(r => setTimeout(r, 800));
-      try { data = await explFetch(username, apiKey, s, e); }
-      catch { failedWindows++; data = []; }
-    }
-    all = all.concat(data);
+  for (let i = 0; i < windows.length; i += concurrency) {
+    const batch = windows.slice(i, i + concurrency);
+    const results = await Promise.all(batch.map(fetchOne));
+    results.forEach(data => {
+      if (data === null) failedWindows++;
+      else all = all.concat(data);
+    });
   }
 
   const seen = new Set();
