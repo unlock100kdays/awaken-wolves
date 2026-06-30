@@ -17,12 +17,12 @@ export async function onRequestOptions() {
 export async function onRequestPost({ request }) {
   try {
     const body = await request.json();
-    const { platform, apiKey, apiSecret, username, action, offerId } = body;
+    const { platform, apiKey, apiSecret, username, action, offerId, dateRange } = body;
     if (!platform || !apiKey) return json({ success: false, error: 'Missing platform or apiKey' }, 400);
     let result;
     switch (platform) {
       case 'Explodely': result = await explodely(username, apiKey, action); break;
-      case 'JVzoo':     result = await jvzoo(username, apiKey, action, offerId); break;
+      case 'JVzoo':     result = await jvzoo(username, apiKey, action, offerId, dateRange); break;
       case 'Clickbank': result = await clickbank(apiKey, apiSecret, action, offerId); break;
       case 'Cartpanda': result = await cartpanda(apiKey, action, offerId); break;
       case 'Digistore': result = await digistore(apiKey, action, offerId); break;
@@ -353,54 +353,66 @@ async function explodely(username, apiKey, action) {
 
 /* ─── JVZOO ──────────────────────────────────────────────────────────────── */
 /* Auth: Basic — API Key as username, literal "x" as password (per JVZoo docs) */
-async function jvzoo(username, apiKey, action) {
+async function jvzoo(username, apiKey, action, offerId, dateRange = 'thismonth') {
   const h = {
     Authorization: 'Basic ' + btoa(`${apiKey}:x`),
     Accept: 'application/json',
   };
 
   if (action === 'fetchStats') {
-    /* Fetch all transactions with proper pagination.
-       JVZoo v3.0 requires start_date + end_date (YYYY-MM-DD).
-       We chunk by month so each request stays under any per-page cap. */
-    const all       = [];
-    let fetchErr    = null;
-    const seen      = new Set();
-    const isoTomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    /* Compute start/end from dateRange param — all UTC */
+    const now         = new Date();
+    const isoD        = d => d.toISOString().slice(0, 10);
+    const todayUTC    = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const tomorrowUTC = new Date(todayUTC.getTime() + 86400000);
 
-    /* Build monthly date chunks from 2011-01-01 (JVZoo founding) to today */
-    function isoYM(y, m) {
-      return `${y}-${String(m).padStart(2,'0')}-01`;
+    let rangeStart, rangeEnd, rangeLabel;
+    switch (dateRange) {
+      case 'today':
+        rangeStart  = isoD(todayUTC);
+        rangeEnd    = isoD(tomorrowUTC);
+        rangeLabel  = 'Today';
+        break;
+      case 'yesterday':
+        rangeStart  = isoD(new Date(todayUTC.getTime() - 86400000));
+        rangeEnd    = isoD(todayUTC);
+        rangeLabel  = 'Yesterday';
+        break;
+      case 'last7':
+        rangeStart  = isoD(new Date(todayUTC.getTime() - 6 * 86400000));
+        rangeEnd    = isoD(tomorrowUTC);
+        rangeLabel  = 'Last 7 Days';
+        break;
+      case 'lastmonth': {
+        const lmS   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+        const lmE   = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+        rangeStart  = isoD(lmS);
+        rangeEnd    = isoD(lmE);
+        rangeLabel  = 'Last Month';
+        break;
+      }
+      default: /* thismonth */
+        rangeStart  = isoD(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)));
+        rangeEnd    = isoD(tomorrowUTC);
+        rangeLabel  = 'This Month';
     }
-    function lastDayISO(y, m) {
-      return new Date(y, m, 0).toISOString().slice(0, 10); // day=0 → last day of prev month
-    }
-    const startYear = 2025, startMonth = 7; /* last 12 months */
-    const now = new Date();
-    const endYear = now.getFullYear(), endMonth = now.getMonth() + 1;
-    /* Build non-overlapping monthly chunks. Past months end on their last day;
-       current month uses tomorrow so today's transactions are included. */
-    const chunks = [];
-    let cy = startYear, cm = startMonth;
-    while (cy < endYear || (cy === endYear && cm < endMonth)) {
-      chunks.push({ start: isoYM(cy, cm), end: lastDayISO(cy, cm) });
-      cm++;
-      if (cm > 12) { cm = 1; cy++; }
-    }
-    chunks.push({ start: isoYM(endYear, endMonth), end: isoTomorrow }); /* current month */
 
-    const fetchPage = async (start_date, end_date, page) => {
+    /* Single-range paginated fetch — no monthly chunks needed */
+    const all  = [];
+    const seen = new Set();
+
+    const fetchPage = async (pageIdx) => {
       try {
-        const q = new URLSearchParams({ start_date, end_date, page_index: String(page) });
+        const q = new URLSearchParams({ start_date: rangeStart, end_date: rangeEnd, page_index: String(pageIdx) });
         const r = await fetch(`https://api.jvzoo.com/v3.0/transactions?${q}`, { headers: h });
         if (!r.ok) return null;
         const d = await r.json().catch(() => null);
         if (!d) return null;
-        const tx      = Array.isArray(d?.results) ? d.results : (Array.isArray(d) ? d : []);
+        const tx      = Array.isArray(d?.results) ? d.results : [];
         const pag     = d?.meta?.pagination ?? {};
         const hasMore = pag.has_more ?? false;
-        const pageSize = pag.page_size ?? 50;
         const total   = d?.meta?.total_count ?? null;
+        const pageSize = pag.page_size ?? 50;
         const lastPage = total !== null ? Math.ceil(total / pageSize) - 1 : null;
         return { tx, hasMore, lastPage };
       } catch { return null; }
@@ -408,211 +420,151 @@ async function jvzoo(username, apiKey, action) {
 
     const addTx = (txList) => {
       for (const t of txList) {
-        const key = String(t.transaction_id ?? `${t.sale_date}|${t.amount}|${t.customer?.email}`);
+        const key = String(t.transaction_id ?? `${t.sale_date}|${t.amount}`);
         if (!seen.has(key)) { seen.add(key); all.push(t); }
       }
     };
 
-    const fetchChunk = async (chunk) => {
-      const first = await fetchPage(chunk.start, chunk.end, 0);
-      if (!first || first.tx.length === 0) return;
-      addTx(first.tx);
-      if (!first.hasMore) return;
+    const first = await fetchPage(0);
+    if (first) addTx(first.tx);
 
-      const MAX_PAGE    = first.lastPage ?? 200;
-      const CONCURRENCY = 2; /* 2 concurrent per chunk; 4 chunks run at a time = 8 max JVZoo reqs */
-
-      for (let p = 1; p <= MAX_PAGE; p += CONCURRENCY) {
+    if (first?.hasMore) {
+      const MAX   = first.lastPage ?? 500;
+      const CONC  = 3;
+      for (let p = 1; p <= MAX; p += CONC) {
         const batch = [];
-        for (let pp = p; pp <= Math.min(p + CONCURRENCY - 1, MAX_PAGE); pp++) batch.push(pp);
-        const results = await Promise.allSettled(batch.map(pp => fetchPage(chunk.start, chunk.end, pp)));
+        for (let pp = p; pp <= Math.min(p + CONC - 1, MAX); pp++) batch.push(pp);
+        const results = await Promise.allSettled(batch.map(pp => fetchPage(pp)));
         let hitEmpty = false;
-        for (const r of results) {
-          const res = r.status === 'fulfilled' ? r.value : null;
-          if (!res || res.tx.length === 0) { hitEmpty = true; continue; }
-          addTx(res.tx);
+        for (const res of results) {
+          const v = res.status === 'fulfilled' ? res.value : null;
+          if (!v || v.tx.length === 0) { hitEmpty = true; continue; }
+          addTx(v.tx);
         }
         if (hitEmpty && first.lastPage === null) break;
       }
-    };
-
-    /* Current month is last in chunks[]; process it FIRST so today/yesterday/7-day are
-       always populated even if the Worker runs out of time on historical months. */
-    const currentMonthChunk = chunks[chunks.length - 1];
-    const olderChunks       = chunks.slice(0, chunks.length - 1);
-
-    await fetchChunk(currentMonthChunk);
-
-    /* Historical months in groups of 5 — max 5×2=10 concurrent JVZoo requests */
-    const CHUNK_BATCH = 5;
-    for (let i = 0; i < olderChunks.length; i += CHUNK_BATCH) {
-      await Promise.allSettled(olderChunks.slice(i, i + CHUNK_BATCH).map(fetchChunk));
     }
 
-    if (all.length === 0 && fetchErr) return { success: false, error: fetchErr };
-    if (all.length === 0) return { success: false, error: 'JVZoo returned 0 transactions. Check API key.' };
-
-    /* Sort newest-first so recentTx collects the latest 25, not the oldest */
-    all.sort((a, b) => {
-      const tsOf = tx => {
-        const raw = tx.sale_date ?? tx.created_at ?? tx.date ?? '';
-        if (!raw) return 0;
-        const d = new Date(String(raw).includes('T') ? raw : raw + 'T00:00:00Z');
-        return isNaN(d) ? 0 : d.getTime();
-      };
-      return tsOf(b) - tsOf(a);
-    });
-
-    /* ── Compute stats from raw transactions ── */
-    const nowTs = Math.floor(Date.now() / 1000);
-    const todayMid   = Math.floor(new Date(new Date().setUTCHours(0,0,0,0)).getTime() / 1000);
-    const ydayMid    = todayMid - 86400;
-    const mid7       = todayMid - 6 * 86400;
-    const mid30      = todayMid - 29 * 86400;
-
+    /* ── Aggregate stats ── */
     let gross = 0, sellerGross = 0, refundAmt = 0, cbAmt = 0, totalFees = 0;
-    let orders = 0, refunds = 0, cbs = 0, rebills = 0;
-    let todayRev = 0, ydayRev = 0, rev7 = 0, rev30 = 0;
+    let orders = 0, refunds = 0, cbs = 0;
     let lastSaleTs = 0;
-    const emails   = new Set();
-    const prodMap  = {};
-    const affMap   = {};
+    const emails  = new Set();
+    const prodMap = {};
+    const affMap  = {};
     const recentTx = [];
 
+    all.sort((a, b) => new Date(b.sale_date||0) - new Date(a.sale_date||0));
+
     for (const tx of all) {
-      /* Amount — gross sale price; payouts.seller_earnings = what seller nets */
-      const amt         = parseFloat(tx.amount ?? 0) || 0;
-      const jvzFee      = parseFloat(tx.payouts?.jvzoo_fee ?? 0) || 0;
-      const sellerNet   = parseFloat(tx.payouts?.seller_earnings ?? tx.amount ?? 0) || 0;
+      const amt       = parseFloat(tx.amount ?? 0) || 0;
+      const jvzFee    = parseFloat(tx.payouts?.jvzoo_fee ?? 0) || 0;
+      const sellerNet = parseFloat(tx.payouts?.seller_earnings ?? 0) || 0;
+      const status    = String(tx.status ?? '').toUpperCase();
+      const isRef     = status.includes('REFUND');
+      const isCB      = status.includes('CHARG') || status.includes('DISPUT') || status.includes('CGBK');
+      const isSale    = !isRef && !isCB;
 
-      /* Type — status field: COMPLETED, REFUNDED, CHARGED_BACK, DISPUTED */
-      const status  = String(tx.status ?? 'COMPLETED').toUpperCase();
-      const refObj  = tx.refund; /* non-null when refunded */
-      const isRef   = status.includes('REFUND') || refObj !== null && refObj !== undefined;
-      const isCB    = status.includes('CHARG') || status.includes('DISPUT') || status.includes('CGBK');
-      const isSale  = !isRef && !isCB;
-      const isRebill = status.includes('REBILL') || false;
-
-      /* Timestamp — sale_date is full ISO: "2026-06-29T17:09:31Z" */
       let ts = 0;
-      if (tx.sale_date) {
-        const d = new Date(tx.sale_date);
-        if (!isNaN(d)) ts = Math.floor(d.getTime() / 1000);
-      }
+      if (tx.sale_date) { const d = new Date(tx.sale_date); if (!isNaN(d)) ts = Math.floor(d.getTime() / 1000); }
 
-      /* Customer — nested object */
-      const cust     = tx.customer ?? {};
-      const email    = (cust.email ?? '').toLowerCase();
+      const cust    = tx.customer ?? {};
+      const email   = (cust.email ?? '').toLowerCase();
       const custName = [cust.first_name, cust.last_name].filter(Boolean).join(' ');
       const country  = cust.country ?? '';
-
-      /* Product */
-      const pid   = String(tx.product_id ?? '_unk');
-      const pname = tx.product_name ?? pid;
-
-      /* Affiliate — nested object */
-      const aff     = tx.affiliate ?? {};
-      const affId   = String(aff.id ?? '');
-      const affName = aff.display_name ?? '';
+      const pid      = String(tx.product_id ?? '_unk');
+      const pname    = tx.product_name ?? pid;
+      const aff      = tx.affiliate ?? {};
+      const affId    = String(aff.id ?? '');
+      const affName  = aff.display_name ?? '';
 
       if (email) emails.add(email);
 
-      /* Revenue buckets */
       if (isSale) {
-        gross += amt;
-        sellerGross += sellerNet;
-        orders++;
-        totalFees += jvzFee;
-        if (isRebill) rebills++;
-        if (ts >= todayMid)                 todayRev += amt;
-        if (ts >= ydayMid && ts < todayMid) ydayRev  += amt;
-        if (ts >= mid7)                     rev7     += amt;
-        if (ts >= mid30)                    rev30    += amt;
-        if (ts > lastSaleTs)                lastSaleTs = ts;
-      } else if (isRef) {
-        refundAmt += amt; refunds++;
-      } else if (isCB) {
-        cbAmt += amt; cbs++;
-      }
+        gross += amt; sellerGross += sellerNet; orders++; totalFees += jvzFee;
+        if (ts > lastSaleTs) lastSaleTs = ts;
+      } else if (isRef) { refundAmt += amt; refunds++; }
+        else if (isCB)  { cbAmt     += amt; cbs++;     }
 
-      /* Per-product */
-      if (!prodMap[pid]) prodMap[pid] = { id:pid, name:pname, revenue:0, orders:0, refunds:0, refundAmount:0, chargebacks:0, cbAmount:0, today:0, week7:0, week30:0 };
+      if (!prodMap[pid]) prodMap[pid] = { id:pid, name:pname, revenue:0, orders:0, refunds:0, chargebacks:0 };
       const p = prodMap[pid];
-      if (isRef)       { p.revenue -= amt; p.refunds++;     p.refundAmount += amt; }
-      else if (isCB)   { p.revenue -= amt; p.chargebacks++; p.cbAmount     += amt; }
-      else             { p.revenue += amt; p.orders++;
-                         if (ts >= todayMid) p.today  += amt;
-                         if (ts >= mid7)     p.week7  += amt;
-                         if (ts >= mid30)    p.week30 += amt; }
+      if      (isRef) { p.revenue -= amt; p.refunds++; }
+      else if (isCB)  { p.revenue -= amt; p.chargebacks++; }
+      else            { p.revenue += amt; p.orders++; }
 
-      /* Affiliates */
-      if (affId && affId !== '') {
+      if (affId) {
         if (!affMap[affId]) affMap[affId] = { id:affId, name:affName||affId, sales:0, revenue:0 };
         if (isSale) { affMap[affId].sales++; affMap[affId].revenue += amt; }
       }
 
-      /* Recent transactions (latest 25) */
       if (recentTx.length < 25) {
-        const dateStr = ts ? new Date(ts*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '';
         recentTx.push({
-          date: dateStr,
+          date: ts ? new Date(ts*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '',
           type: isRef ? 'refund' : isCB ? 'chargeback' : 'sale',
-          amount: amt,
-          product: pname !== pid ? pname : '',
+          amount: amt, product: pname !== pid ? pname : '',
           customer: custName || (email ? email.split('@')[0] : ''),
-          country,
-          affiliate: affName || affId || '',
-          rebill: isRebill,
+          country, affiliate: affName || affId || '',
         });
       }
     }
 
-    const netRev  = gross - refundAmt - cbAmt;
-    const refRate = orders > 0 ? refunds / orders * 100 : 0;
-    const cbRate  = orders > 0 ? cbs     / orders * 100 : 0;
-
+    const netEarnings = gross - refundAmt - cbAmt;
     const prods = Object.values(prodMap)
       .sort((a, b) => b.revenue - a.revenue)
-      .map(p => ({ ...p, aov: p.orders > 0 ? p.revenue / p.orders : 0, refundRate: p.orders > 0 ? p.refunds / p.orders * 100 : 0, cbRate: p.orders > 0 ? p.chargebacks / p.orders * 100 : 0 }));
-
+      .map(p => ({ ...p,
+        aov:        p.orders > 0 ? p.revenue / p.orders : 0,
+        refundRate: p.orders > 0 ? p.refunds / p.orders * 100 : 0,
+        cbRate:     p.orders > 0 ? p.chargebacks / p.orders * 100 : 0,
+      }));
     const affs = Object.values(affMap)
       .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 20)
-      .map((a, i) => ({ ...a, rank: i + 1 }));
+      .slice(0, 20).map((a, i) => ({ ...a, rank: i + 1 }));
 
     const lastSaleDate = lastSaleTs
-      ? new Date(lastSaleTs * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase()
+      ? new Date(lastSaleTs * 1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).toUpperCase()
       : '';
 
     return {
       success: true,
       raw: {
-        total_revenue:      gross,
-        net_revenue:        netRev,
-        today_revenue:      todayRev,
-        yesterday_revenue:  ydayRev,
-        revenue_7_days:     rev7,
-        revenue_30_days:    rev30,
-        total_orders:       orders,
-        unique_customers:   emails.size,
-        avg_order_value:    orders > 0 ? gross / orders : 0,
-        customer_ltv:       emails.size > 0 ? netRev / emails.size : 0,
-        total_platform_fees: totalFees > 0 ? totalFees : undefined,
-        seller_net_revenue:  sellerGross > 0 ? sellerGross : undefined,
-        total_rebills:      rebills > 0 ? rebills : undefined,
-        rebill_rate:        orders > 0 && rebills > 0 ? rebills / orders * 100 : undefined,
-        refund_rate:        refRate,
-        refund_amount:      refundAmt,
-        total_refunds:      refunds,
-        chargeback_rate:    cbRate,
-        chargeback_amount:  cbAmt,
-        total_chargebacks:  cbs,
-        last_sale_date:     lastSaleDate,
-        top_products:       prods,
-        affiliates:         affs,
+        /* JVZoo report columns (matches their Report Center table) */
+        jvz_sales:           orders,
+        jvz_earnings:        gross,
+        jvz_net_earnings:    netEarnings,
+        jvz_asv:             orders > 0 ? gross / orders : 0,
+        jvz_aov:             orders > 0 ? gross / orders : 0,
+        jvz_refund_pct:      orders > 0 ? refunds / orders * 100 : 0,
+        jvz_refund_amt_pct:  gross  > 0 ? refundAmt / gross * 100 : 0,
+        jvz_refunds:         refunds,
+        jvz_refund_dollars:  refundAmt,
+        jvz_disputes:        cbs,
+        jvz_disputes_dollars: cbAmt,
+        jvz_disputes_pct:    orders > 0 ? cbs / orders * 100 : 0,
+        /* Context */
+        date_range:          dateRange,
+        range_label:         rangeLabel,
+        range_start:         rangeStart,
+        range_end:           rangeEnd,
+        /* Compat fields for STAT_SPEC tiles */
+        total_revenue:       gross,
+        net_revenue:         netEarnings,
+        total_orders:        orders,
+        unique_customers:    emails.size,
+        avg_order_value:     orders > 0 ? gross / orders : 0,
+        refund_rate:         orders > 0 ? refunds / orders * 100 : 0,
+        refund_amount:       refundAmt,
+        total_refunds:       refunds,
+        chargeback_rate:     orders > 0 ? cbs / orders * 100 : 0,
+        chargeback_amount:   cbAmt,
+        total_chargebacks:   cbs,
+        total_platform_fees: totalFees || undefined,
+        seller_net_revenue:  sellerGross || undefined,
+        last_sale_date:      lastSaleDate,
+        top_products:        prods,
+        affiliates:          affs,
         recent_transactions: recentTx,
       },
-      _counts: { total: all.length, chunks: chunks.length },
+      _counts: { total: all.length },
     };
   }
 

@@ -147,6 +147,19 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 /* AFFILIATES */
 .refresh-btn{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--silver);background:transparent;border:1px solid var(--border);border-radius:3px;padding:4px 10px;cursor:pointer;transition:all .2s;align-self:flex-end;font-family:inherit;margin-top:8px}
 .refresh-btn:hover{border-color:rgba(180,0,0,.3);color:var(--red)}
+/* JVZoo date-range selector */
+.dr-select{background:rgba(20,4,4,.9);border:1px solid rgba(150,0,0,.35);border-radius:4px;color:#d0d0d8;font-size:.62rem;letter-spacing:.06em;padding:3px 6px;cursor:pointer;font-family:inherit;outline:none}
+.dr-select:hover{border-color:rgba(204,17,0,.6)}
+/* JVZoo report table */
+.jvz-report{width:100%;border-collapse:collapse;font-size:.64rem;margin-bottom:4px}
+.jvz-report th{text-align:center;letter-spacing:.09em;text-transform:uppercase;color:rgba(160,160,175,.55);padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.06);white-space:nowrap;font-weight:600}
+.jvz-report td{text-align:center;padding:6px 6px;border-bottom:1px solid rgba(255,255,255,.03)}
+.jvz-report td:first-child{text-align:left;color:rgba(160,160,175,.5);font-size:.6rem;letter-spacing:.06em}
+.jvz-report .jv-val{font-size:.78rem;font-weight:700;color:#e0e0e0}
+.jvz-report .jv-green{color:#22dd66}
+.jvz-report .jv-red{color:#ee2200}
+.jvz-report .jv-orange{color:#ff8800}
+.jvz-na{color:rgba(130,130,145,.3)!important;font-size:.6rem!important}
 
 /* PROJECT CARD */
 .project-card{background:rgba(10,4,4,.92);border:1px solid rgba(100,0,0,.2);border-radius:6px;overflow:hidden;position:relative}
@@ -627,7 +640,7 @@ function saveState(){
   const state={bizops:{live:[],under:[]},nutra:{live:[],under:[]}};
   ['bizops','nutra'].forEach(col=>{
     document.querySelectorAll(`#list-live-${col} .offer-card`).forEach(c=>{
-      state[col].live.push({id:c.dataset.id,name:c.dataset.name,platform:c.dataset.platform,offerId:c.dataset.offerid,raw:JSON.parse(c.dataset.blob||'null')});
+      state[col].live.push({id:c.dataset.id,name:c.dataset.name,platform:c.dataset.platform,offerId:c.dataset.offerid,raw:JSON.parse(c.dataset.blob||'null'),dateRange:c.dataset.daterange||'thismonth'});
     });
     document.querySelectorAll(`#list-under-${col} .project-card`).forEach(c=>{
       const cl={};
@@ -656,7 +669,7 @@ function restoreAll(){
     ['bizops','nutra'].forEach(col=>{
       if(state[col]?.live?.length){
         document.getElementById(`list-live-${col}`).innerHTML='';
-        state[col].live.forEach(o=>createOfferCard(o.name,o.platform,o.raw||null,col,o.id,o.offerId,true,o.raw?null:'No cached data — click Refresh'));
+        state[col].live.forEach(o=>createOfferCard(o.name,o.platform,o.raw||null,col,o.id,o.offerId,true,o.raw?null:'No cached data — click Refresh',null,o.dateRange||'thismonth'));
       }
       if(state[col]?.under?.length){
         document.getElementById(`list-under-${col}`).innerHTML='';
@@ -850,13 +863,14 @@ async function connectOffer(){
   document.getElementById('loading-msg').textContent=`Pulling all data for "${offerName}"…`;
   const creds=getCredFor(MP);
   let raw=null,apiErr=null;
+  const initDR=MP==='JVzoo'?'thismonth':undefined;
   if(creds){
-    const res=await apiFetchStats(MP,creds,offerId||'',offerName);
+    const res=await apiFetchStats(MP,creds,offerId||'',offerName,initDR);
     raw=res.raw||null; apiErr=res.err||null;
   } else {
     apiErr='No credentials saved for '+MP;
   }
-  createOfferCard(offerName,MP,raw,MC,uid(),offerId,false,apiErr);
+  createOfferCard(offerName,MP,raw,MC,uid(),offerId,false,apiErr,null,initDR);
   closeModal('modal-offer');updateStats();saveState();scheduleVeins();
 }
 
@@ -885,10 +899,11 @@ async function apiFetchOffers(plat,creds){
   }
 }
 
-async function apiFetchStats(plat,creds,offerId,offerName){
+async function apiFetchStats(plat,creds,offerId,offerName,dateRange){
   try{
-    const d=await callProxy({platform:plat,apiKey:creds.apiKey,apiSecret:creds.apiSecret||'',username:creds.username||'',action:'fetchStats',offerId});
-    console.log(`[${plat}] raw response:`,d._counts,'sample:',d._sample);
+    const payload={platform:plat,apiKey:creds.apiKey,apiSecret:creds.apiSecret||'',username:creds.username||'',action:'fetchStats',offerId};
+    if(dateRange)payload.dateRange=dateRange;
+    const d=await callProxy(payload);
     return{raw:d.raw||{},counts:d._counts||{}};
   }catch(e){
     console.error(`[${plat}] fetchStats error:`,e.message);
@@ -1020,7 +1035,8 @@ function statCls(spec,v){
   return c;
 }
 
-function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,staleErr){
+function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,staleErr,dateRange){
+  dateRange=dateRange||'thismonth';
   const list=document.getElementById(`list-live-${col}`);
   const emp=list.querySelector('.empty-state');if(emp)emp.remove();
   const card=document.createElement('div');
@@ -1031,15 +1047,22 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
   card.dataset.platform=platform||'';
   card.dataset.offerid=offerId||'';
   card.dataset.blob=JSON.stringify(raw||null);
+  card.dataset.daterange=dateRange;
 
   const pclr=(PCFG[platform]||{color:'#8a96a3'}).color;
   const platBadge=platform?`<span class="plat-badge" style="color:${pclr}">${escHtml(platform)}</span>`:'';
+  const isJVZ=platform==='JVzoo';
+
+  /* Time-frame selector (JVZoo only) */
+  const drOpts=['today','yesterday','last7','thismonth','lastmonth'];
+  const drLabels={today:'Today',yesterday:'Yesterday',last7:'Last 7 Days',thismonth:'This Month',lastmonth:'Last Month'};
+  const drSelectHTML=isJVZ?`<select class="dr-select" onclick="event.stopPropagation()" onchange="document.querySelector('[data-id=\\'${cid}\\']').dataset.daterange=this.value;refreshOffer('${cid}')">${drOpts.map(v=>`<option value="${v}"${v===dateRange?' selected':''}>${drLabels[v]}</option>`).join('')}</select>`:'';
 
   /* ── Error state */
   if(apiErr||!raw){
     card.innerHTML=`
       <div class="oc-header" onclick="toggleCard(this,'oc-body')">
-        <span class="oc-name">💰 ${escHtml(name)}</span>${platBadge}
+        <span class="oc-name">💰 ${escHtml(name)}</span>${platBadge}${drSelectHTML}
         <span class="live-dot" style="color:#cc4400">ERR</span>
         <span class="oc-toggle open">▲</span>
         <button class="oc-remove" onclick="removeCard(event,this)">✕</button>
@@ -1048,7 +1071,7 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
         <div class="api-err-box">
           <div class="api-err-ico">⚠️</div>
           <div class="api-err-msg">${escHtml(apiErr||'API returned no data')}</div>
-          <div class="api-err-hint">Check credentials or try refreshing. If you see "BOT_BLOCKED", the Explodely API is behind Cloudflare bot protection — try again in a few seconds.</div>
+          <div class="api-err-hint">Check credentials or try refreshing.</div>
           <button class="api-retry-btn" onclick="refreshOffer('${cid}')">↻ Retry</button>
         </div>
       </div>`;
@@ -1057,19 +1080,56 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
     return;
   }
 
-  /* ── Build stat grid from STAT_SPEC — only fields with real values */
-  const statTiles=STAT_SPEC.filter(spec=>{
+  /* ── JVZoo: report-style summary table ── */
+  const jvzReportHTML=isJVZ?(() => {
+    const r=raw;
+    const na='<span class="jvz-na">—</span>';
+    const fv=(v,cls='')=>`<span class="jv-val${cls?' jv-'+cls:''}">${v}</span>`;
+    const refPct=Number(r.jvz_refund_pct||0);
+    const dispPct=Number(r.jvz_disputes_pct||0);
+    const refCl=refPct>10?'red':refPct>5?'orange':'green';
+    const dispCl=dispPct>1?'red':dispPct>0.3?'orange':'green';
+    return`<div class="ex-block">
+      <div class="ex-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Report — ${escHtml(drLabels[dateRange]||dateRange)}</span>
+        <span style="font-size:.6rem;color:rgba(150,150,165,.4)">${r.range_start||''} → ${r.range_end||''}</span>
+      </div>
+      <div class="funnel-wrap"><table class="jvz-report">
+        <thead><tr>
+          <th></th><th>Sales</th><th>Earnings</th><th>Net Earnings</th>
+          <th>ASV</th><th>AOV</th><th>Refund%</th><th>Refund Amt%</th>
+          <th>Refunds</th><th>Refund $</th><th>Disputes</th><th>Disputes $</th><th>Disputes%</th>
+        </tr></thead>
+        <tbody><tr>
+          <td>${escHtml(drLabels[dateRange]||dateRange)}</td>
+          <td>${fv((r.jvz_sales||0).toLocaleString())}</td>
+          <td>${fv(fmt(r.jvz_earnings||0),'green')}</td>
+          <td>${fv(fmt(r.jvz_net_earnings||0),'green')}</td>
+          <td>${fv(fmt(r.jvz_asv||0),'green')}</td>
+          <td>${fv(fmt(r.jvz_aov||0),'green')}</td>
+          <td>${fv((refPct).toFixed(2)+'%',refCl)}</td>
+          <td>${fv(Number(r.jvz_refund_amt_pct||0).toFixed(2)+'%',refCl)}</td>
+          <td>${fv((r.jvz_refunds||0).toLocaleString(),r.jvz_refunds?'red':'')}</td>
+          <td>${fv(fmt(r.jvz_refund_dollars||0),r.jvz_refund_dollars?'red':'')}</td>
+          <td>${fv((r.jvz_disputes||0).toLocaleString(),r.jvz_disputes?'red':'')}</td>
+          <td>${fv(fmt(r.jvz_disputes_dollars||0),r.jvz_disputes_dollars?'red':'')}</td>
+          <td>${fv((dispPct).toFixed(2)+'%',dispCl)}</td>
+        </tr></tbody>
+      </table></div>
+    </div>`;
+  })():'';
+
+  /* ── Non-JVZoo: stat tiles grid */
+  const statTiles=!isJVZ?STAT_SPEC.filter(spec=>{
     const v=raw[spec.k];
     if(v==null||v==='') return false;
     return spec.showZero ? true : v!==0;
   }).map(spec=>{
     const v=raw[spec.k];
     const cls=statCls(spec,v);
-    const todayAttr=spec.today?' data-today="1"':'';
-    const alltimeAttr=spec.alltime?' data-alltime="1"':'';
     const fullCls=spec.full?' full':'';
-    return`<div class="df-item${fullCls}"><span class="df-label">${spec.l}</span><span class="df-value ${cls}"${todayAttr}${alltimeAttr}>${fmtStat(spec.f,v)}</span></div>`;
-  }).join('');
+    return`<div class="df-item${fullCls}"><span class="df-label">${spec.l}</span><span class="df-value ${cls}">${fmtStat(spec.f,v)}</span></div>`;
+  }).join(''):'';
 
   /* ── Funnel / Product table */
   const prods=Array.isArray(raw.top_products)?raw.top_products:[];
@@ -1077,37 +1137,21 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
   const prodTotalOrd=prods.reduce((s,p)=>s+p.orders,0);
   const prodTotalRef=prods.reduce((s,p)=>s+p.refunds,0);
   const prodTotalCB =prods.reduce((s,p)=>s+p.chargebacks,0);
-  const prodTotalToday=prods.reduce((s,p)=>s+p.today,0);
-  const prodTotal7d   =prods.reduce((s,p)=>s+p.week7,0);
-  const prodTotal30d  =prods.reduce((s,p)=>s+p.week30,0);
   const prodsHTML=prods.length>0?`
     <div class="ex-block">
       <div class="ex-title">Funnels / Products (${prods.length})</div>
       <div class="funnel-wrap"><table class="funnel-tbl">
         <thead><tr>
-          <th>Funnel</th>
-          <th>Orders</th>
-          <th>Revenue</th>
-          <th>AOV</th>
-          <th>Today</th>
-          <th>7D</th>
-          <th>30D</th>
-          <th>RF #</th>
-          <th>RF %</th>
-          <th>CB #</th>
+          <th>Funnel</th><th>Sales</th><th>Earnings</th><th>AOV</th><th>RF #</th><th>RF %</th><th>CB #</th>
         </tr></thead>
         <tbody>
         ${prods.map(p=>{
           const rCl=p.refundRate>4?'red':p.refundRate>2.5?'orange':'green';
-          const cCl=p.cbRate>0.3?'red':p.cbRate>0.15?'orange':'green';
           return`<tr>
             <td title="${escHtml(p.name||'')}">${escHtml(p.name||p.id||'?')}</td>
             <td>${p.orders.toLocaleString()}</td>
             <td class="green">${fmt(p.revenue)}</td>
             <td class="green">${fmt(p.aov)}</td>
-            <td class="f-today">${p.today>0?fmt(p.today):'—'}</td>
-            <td class="f-today">${p.week7>0?fmt(p.week7):'—'}</td>
-            <td class="f-today">${p.week30>0?fmt(p.week30):'—'}</td>
             <td class="${p.refunds>0?'red':''}">${p.refunds||0}</td>
             <td class="${rCl}">${p.refundRate.toFixed(1)}%</td>
             <td class="${p.chargebacks>0?'red':''}">${p.chargebacks||0}</td>
@@ -1119,27 +1163,11 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
           <td>${prodTotalOrd.toLocaleString()}</td>
           <td class="green">${fmt(prodTotalRev)}</td>
           <td class="green">${prodTotalOrd>0?fmt(prodTotalRev/prodTotalOrd):'—'}</td>
-          <td>${prodTotalToday>0?fmt(prodTotalToday):'—'}</td>
-          <td>${prodTotal7d>0?fmt(prodTotal7d):'—'}</td>
-          <td>${prodTotal30d>0?fmt(prodTotal30d):'—'}</td>
           <td class="${prodTotalRef>0?'red':''}">${prodTotalRef}</td>
           <td>${prodTotalOrd>0?(prodTotalRef/prodTotalOrd*100).toFixed(1)+'%':'0%'}</td>
           <td class="${prodTotalCB>0?'red':''}">${prodTotalCB}</td>
         </tr></tfoot>
       </table></div>
-    </div>`:'';
-
-  /* ── Countries */
-  const ctries=Array.isArray(raw.top_countries)?raw.top_countries:[];
-  const countriesHTML=ctries.length?`
-    <div class="ex-block">
-      <div class="ex-title">Top Countries</div>
-      ${ctries.map((c,i)=>`<div class="ex-row ctry-row">
-        <span class="ex-rank">#${i+1}</span>
-        <span class="ex-name">${cname(c.code)}</span>
-        <span class="ex-sub">${c.count} sales</span>
-        <span class="ex-val green">${fmt(c.revenue)}</span>
-      </div>`).join('')}
     </div>`:'';
 
   /* ── Affiliates */
@@ -1162,10 +1190,9 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
       <div class="ex-title">Recent ${txns.length} Transactions</div>
       ${txns.map(t=>{
         const tc=String(t.type||'sale').toLowerCase();
-        const tl=t.rebill?'rebill':tc;
         return`<div class="ex-row txn-row">
-          <span class="ex-sub" style="white-space:nowrap;font-size:.58rem">${escHtml((t.date||'').replace(/^\d\d:\d\d:\d\d /,''))}</span>
-          <span class="txn-type ${tl}">${tl}</span>
+          <span class="ex-sub" style="white-space:nowrap;font-size:.58rem">${escHtml(t.date||'')}</span>
+          <span class="txn-type ${tc}">${tc}</span>
           <span class="ex-name">${escHtml(t.product||t.customer||'—')}</span>
           <span class="ex-sub">${escHtml(t.customer||'')}</span>
           <span class="ex-sub" style="color:rgba(200,170,0,.7)">${t.affiliate?escHtml(t.affiliate):'Direct'}</span>
@@ -1176,15 +1203,15 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
 
   card.innerHTML=`
     <div class="oc-header" onclick="toggleCard(this,'oc-body')">
-      <span class="oc-name">💰 ${escHtml(name)}</span>${platBadge}
+      <span class="oc-name">💰 ${escHtml(name)}</span>${platBadge}${drSelectHTML}
       <span class="live-dot">● LIVE</span>
       <span class="oc-toggle open">▲</span>
       <button class="oc-remove" onclick="removeCard(event,this)">✕</button>
     </div>
     <div class="oc-body">
       ${staleErr?`<div class="data-src-live" style="color:#cc6600;border-color:#cc6600">⚠ Showing cached data — refresh failed: ${escHtml(staleErr)}</div>`:`<div class="data-src-live">↳ live data from ${escHtml(platform)} API</div>`}
-      <div class="data-grid">${statTiles}</div>
-      ${prodsHTML}${countriesHTML}${affHTML}${txnHTML}
+      ${isJVZ?jvzReportHTML:`<div class="data-grid">${statTiles}</div>`}
+      ${prodsHTML}${affHTML}${txnHTML}
       <button class="refresh-btn" onclick="refreshOffer('${cid}')">🔄 Refresh Data</button>
     </div>`;
   list.appendChild(card);
@@ -1209,8 +1236,8 @@ function removeCard(e,btn){
 async function refreshOffer(cardId){
   const card=document.querySelector(`[data-id="${cardId}"]`);if(!card)return;
   const name=card.dataset.name,platform=card.dataset.platform,offerId=card.dataset.offerid;
+  const dateRange=card.dataset.daterange||'thismonth';
 
-  /* Save cached data before wiping body */
   let cachedRaw=null;
   try{cachedRaw=JSON.parse(card.dataset.blob||'null');}catch{}
 
@@ -1220,20 +1247,19 @@ async function refreshOffer(cardId){
   const creds=getCredFor(platform);
   let raw=null,apiErr=null;
   if(creds){
-    const res=await apiFetchStats(platform,creds,offerId||'',name);
+    const res=await apiFetchStats(platform,creds,offerId||'',name,dateRange);
     raw=res.raw||null; apiErr=res.err||null;
   } else {
     apiErr='No credentials saved for '+platform;
   }
 
-  /* API failed but we have old data — show cached with a stale banner */
   const staleErr=(raw===null&&cachedRaw)?apiErr:null;
   if(raw===null&&cachedRaw){raw=cachedRaw;apiErr=null;}
 
   const col=card.closest('[id^="list-live-"]').id.replace('list-live-','');
   const cardId2=card.dataset.id;
   card.remove();
-  createOfferCard(name,platform,raw,col,cardId2,offerId,true,apiErr,staleErr);
+  createOfferCard(name,platform,raw,col,cardId2,offerId,true,apiErr,staleErr,dateRange);
   saveState();updateStats();scheduleVeins();
 }
 
