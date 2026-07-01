@@ -421,6 +421,7 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 .api-retry-btn:hover{background:rgba(200,0,0,.22)}
 .data-src-live{font-size:.54rem;letter-spacing:.12em;color:rgba(0,220,80,.45);text-transform:uppercase;padding:2px 0 8px}
 </style>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 <canvas id="bg"></canvas>
@@ -797,10 +798,10 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
              ondragover="event.preventDefault();this.classList.add('drag-over')"
              ondragleave="this.classList.remove('drag-over')"
              ondrop="handleAffCsvDrop(event)">
-          <p>📂 Click or drag &amp; drop a CSV file</p>
-          <p style="margin-top:4px;font-size:.57rem">JVZoo / Explodely / ClickBank export, or generic CSV with Date, Amount, Type columns</p>
+          <p>📂 Click or drag &amp; drop your export file</p>
+          <p style="margin-top:4px;font-size:.57rem">Supports .xls, .xlsx, .csv — JVZoo / Explodely / ClickBank exports or generic (Date, Amount, Type)</p>
         </div>
-        <input type="file" id="aff-csv-file" accept=".csv,.txt" style="display:none" onchange="handleAffCsvFile(this)"/>
+        <input type="file" id="aff-csv-file" accept=".csv,.xls,.xlsx,.ods,.txt" style="display:none" onchange="handleAffCsvFile(this)"/>
         <div id="aff-csv-preview" style="margin-top:8px"></div>
       </div>
       <div class="modal-btns">
@@ -828,10 +829,10 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
            ondragover="event.preventDefault();this.classList.add('drag-over')"
            ondragleave="this.classList.remove('drag-over')"
            ondrop="handleCsvDrop(event)">
-        <p>📂 Click or drag &amp; drop CSV here</p>
-        <p style="margin-top:4px;font-size:.57rem">JVZoo, Explodely, ClickBank exports or generic (Date, Amount, Type, Product)</p>
+        <p>📂 Click or drag &amp; drop your export file</p>
+        <p style="margin-top:4px;font-size:.57rem">Supports .xls, .xlsx, .csv — JVZoo / Explodely / ClickBank exports or generic (Date, Amount, Type)</p>
       </div>
-      <input type="file" id="csv-file-main" accept=".csv,.txt" style="display:none" onchange="handleCsvFileMain(this)"/>
+      <input type="file" id="csv-file-main" accept=".csv,.xls,.xlsx,.ods,.txt" style="display:none" onchange="handleCsvFileMain(this)"/>
     </div>
     <div id="csv-preview-main" style="margin-top:8px"></div>
     <div class="modal-btns">
@@ -2426,27 +2427,50 @@ function aggCsvRows(rows,map){
 function showCsvPreview(agg,rows,elId){
   document.getElementById(elId).innerHTML=`<div style="background:rgba(0,80,180,.06);border:1px solid rgba(0,80,180,.2);border-radius:4px;padding:8px 10px"><div style="font-size:.58rem;color:#22aaff;font-weight:700;margin-bottom:4px">✓ ${rows} rows parsed</div><div style="font-size:.6rem;color:var(--silver)">Sales: <b style="color:#e0e0e0">${agg.csv_sales}</b> &nbsp;·&nbsp; Commission: <b style="color:#22aaff">${fmt(agg.csv_commission)}</b> &nbsp;·&nbsp; Refunds: <b style="color:#ee2200">${agg.csv_refunds}</b></div></div>`;
 }
+/* Read any spreadsheet/CSV file → calls back with CSV text string.
+   Uses SheetJS for .xls/.xlsx/.ods; plain text for .csv/.txt. */
+function readSpreadsheet(file, cb){
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(ext==='xls'||ext==='xlsx'||ext==='ods'){
+    const r=new FileReader();
+    r.onload=e=>{
+      try{
+        const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        cb(null,XLSX.utils.sheet_to_csv(ws));
+      }catch(err){cb('Could not read Excel file: '+err.message,null);}
+    };
+    r.readAsArrayBuffer(file);
+  } else {
+    const r=new FileReader();
+    r.onload=e=>cb(null,e.target.result);
+    r.readAsText(file);
+  }
+}
+
 function handleAffCsvDrop(e){e.preventDefault();document.getElementById('aff-csv-drop').classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)processAffCsv(f);}
 function handleAffCsvFile(i){if(i.files[0])processAffCsv(i.files[0]);}
 function processAffCsv(file){
-  const r=new FileReader();r.onload=e=>{
-    const p=parseCsv(e.target.result);
-    if(!p||!p.rows.length){document.getElementById('aff-csv-preview').innerHTML='<div style="color:#ee2200;font-size:.65rem">Could not parse CSV — check file has headers.</div>';return;}
+  readSpreadsheet(file,(err,text)=>{
+    if(err){document.getElementById('aff-csv-preview').innerHTML=`<div style="color:#ee2200;font-size:.65rem">${err}</div>`;return;}
+    const p=parseCsv(text);
+    if(!p||!p.rows.length){document.getElementById('aff-csv-preview').innerHTML='<div style="color:#ee2200;font-size:.65rem">Could not parse file — check it has headers.</div>';return;}
     MAAffCsvData=aggCsvRows(p.rows,guessCsvMap(p.headers));
     showCsvPreview(MAAffCsvData,p.rows.length,'aff-csv-preview');
-  };r.readAsText(file);
+  });
 }
 function openCsvImport(cardId){csvTargetCardId=cardId;csvParsed=null;document.getElementById('csv-preview-main').innerHTML='';document.getElementById('btn-csv-apply').disabled=true;document.getElementById('modal-csv').classList.add('open');}
 function handleCsvDrop(e){e.preventDefault();document.getElementById('csv-drop-main').classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)processCsvMain(f);}
 function handleCsvFileMain(i){if(i.files[0])processCsvMain(i.files[0]);}
 function processCsvMain(file){
-  const r=new FileReader();r.onload=e=>{
-    const p=parseCsv(e.target.result);
-    if(!p||!p.rows.length){document.getElementById('csv-preview-main').innerHTML='<div style="color:#ee2200;font-size:.65rem">Could not parse CSV.</div>';return;}
+  readSpreadsheet(file,(err,text)=>{
+    if(err){document.getElementById('csv-preview-main').innerHTML=`<div style="color:#ee2200;font-size:.65rem">${err}</div>`;return;}
+    const p=parseCsv(text);
+    if(!p||!p.rows.length){document.getElementById('csv-preview-main').innerHTML='<div style="color:#ee2200;font-size:.65rem">Could not parse file — check it has headers.</div>';return;}
     csvParsed=aggCsvRows(p.rows,guessCsvMap(p.headers));
     showCsvPreview(csvParsed,p.rows.length,'csv-preview-main');
     document.getElementById('btn-csv-apply').disabled=false;
-  };r.readAsText(file);
+  });
 }
 function applyMainCsv(){
   if(!csvParsed||!csvTargetCardId)return;
