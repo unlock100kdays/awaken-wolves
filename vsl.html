@@ -2266,7 +2266,7 @@ function chooseAffPlatform(el){
   MAAffName=name; MAPlat=el.dataset.plat;
   document.querySelectorAll('#modal-affiliate .plat-chip').forEach(c=>c.classList.remove('selected'));
   el.classList.add('selected');
-  if(MAPlat==='Other'){showAffStep('aff-step-csv');return;}
+  if(MAPlat==='Other'||MAPlat==='Explodely'){showAffStep('aff-step-csv');return;}
   const hints={
     JVzoo:'Your JVZoo Affiliate API key — Account → My Account → API Keys',
     Explodely:'Your Explodely affiliate username + API key',
@@ -2591,7 +2591,7 @@ async function refreshAffCard(cardId){
   if(wrap)wrap.innerHTML='<div style="color:var(--silver);font-size:.6rem;padding:8px 0">Fetching…</div>';
   let creds=null;
   try{creds=JSON.parse(localStorage.getItem('aff_cred::'+platform)||'null');}catch{}
-  if(!creds||platform==='Other'){if(wrap)wrap.innerHTML='<div style="color:#ee8800;font-size:.6rem;padding:4px 0">No API credentials — re-add via + Add Affiliate, or import CSV.</div>';return;}
+  if(!creds||platform==='Other'||platform==='Explodely'){if(wrap)wrap.innerHTML='<div style="color:#ee8800;font-size:.6rem;padding:4px 0">Explodely affiliate has no API — import your CSV export to update data.</div>';renderAffStats(card);return;}
   try{
     const raw=await fetchAffApiData(platform,creds,dateRange);
     card.dataset.raw=JSON.stringify(raw||null);
