@@ -2596,9 +2596,9 @@ function createAffCard(name,platform,raw,csvData,col,id,ipnToken,dateRange,fromR
     <div class="aff-body collapsed">
       <div id="aff-ipn-notify-${cid}" class="ipn-notify"></div>
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px">
-        <select class="form-select" style="font-size:.6rem;padding:3px 6px;width:auto;flex-shrink:0"
+        ${(platform==='JVzoo'||platform==='Explodely'||platform==='Other')?'':`<select class="form-select" style="font-size:.6rem;padding:3px 6px;width:auto;flex-shrink:0"
                 onchange="changeAffDateRange('${cid}',this.value)">${drSel}</select>
-        <button class="refresh-btn" style="margin-top:0" onclick="refreshAffCard('${cid}')">🔄 Refresh</button>
+        <button class="refresh-btn" style="margin-top:0" onclick="refreshAffCard('${cid}')">🔄 Refresh</button>`}
         <button class="refresh-btn" style="margin-top:0" onclick="openCsvImport('${cid}')">📂 Import CSV</button>
       </div>
       <div class="aff-stats-wrap"></div>
@@ -2736,16 +2736,18 @@ function renderAffStats(card){
     html+=`</div>`;
   }
 
-  /* ── Live Postbacks (IPN/ISN) section ── */
-  if(ipn&&ipn.ipn_sales>0){
+  /* ── Live Postbacks (IPN/ISN) section — always shown for CSV-only platforms ── */
+  if(isCsvOnly){
+    const hasSales=ipn&&ipn.ipn_sales>0;
     html+=`<div class="csv-section" style="margin-top:6px;border-top:1px solid rgba(255,150,0,.12);padding-top:8px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <div style="display:flex;align-items:center;gap:6px">
         <span class="aff-section-label" style="margin:0">Live Postbacks</span>
-        <span class="aff-live" style="font-size:.44rem;animation:pulse 1.4s infinite">● LIVE</span>
+        <span class="aff-live" style="font-size:.44rem">● LIVE</span>
       </div>
-      <span style="font-size:.62rem;color:#22aaff;font-weight:700">${fmt(ipn.ipn_net||0)} net</span>
+      ${hasSales?`<span style="font-size:.62rem;color:#22aaff;font-weight:700">${fmt(ipn.ipn_net||0)} net</span>`:''}
     </div>
+    ${hasSales?`
     <div class="data-grid">
       <div class="df-item"><span class="df-label">Sales</span><span class="df-value">${ipn.ipn_sales}</span></div>
       <div class="df-item"><span class="df-label">Refunds</span><span class="df-value ${ipn.ipn_refunds?'red':''}">${ipn.ipn_refunds||0}</span></div>
@@ -2755,6 +2757,9 @@ function renderAffStats(card){
     ${ipn.ipn_recent?.length?`<div class="ex-block" style="margin-top:6px"><div class="ex-title">Recent Postbacks</div>
     ${ipn.ipn_recent.map(t=>`<div class="ex-row txn-row"><span class="ex-sub" style="white-space:nowrap;font-size:.55rem">${escHtml(t.date)}</span><span class="txn-type ${t.type}">${t.type}</span><span class="ex-name">${escHtml(t.product||'—')}</span><span class="ex-val ${t.type==='sale'?'green':'red'}">${fmt(t.amount)}</span></div>`).join('')}
     </div>`:''}
+    `:`<div style="color:rgba(120,160,255,.35);font-size:.57rem;padding:6px 2px;line-height:1.6">
+      No postbacks received yet. Paste the URL below into your platform's IPN/ISN settings — new sales will appear here automatically within 5 minutes.
+    </div>`}
     </div>`;
   }
 
