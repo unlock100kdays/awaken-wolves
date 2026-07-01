@@ -85,53 +85,76 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 .run-pill::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--red);animation:pulse 1.5s infinite}
 
 /* STATS */
-.vsl-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;position:relative;z-index:1;margin-bottom:20px}
+.vsl-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;position:relative;z-index:1;margin-bottom:16px}
 .vs-card{
   position:relative;overflow:hidden;
-  background:linear-gradient(165deg,rgba(18,3,3,.94),rgba(5,5,8,.97) 60%);
-  border:1px solid rgba(180,0,0,.25);border-radius:5px;
-  padding:10px 13px;display:flex;align-items:center;gap:9px;
-  box-shadow:0 8px 20px rgba(0,0,0,.5),inset 0 0 0 1px rgba(0,0,0,.35);
-  transition:border-color .2s,box-shadow .2s,transform .2s;
+  background:linear-gradient(158deg,rgba(4,0,1,.99) 0%,rgba(2,2,9,.99) 55%,rgba(6,0,12,.98) 100%);
+  border:1px solid rgba(110,0,0,.2);border-radius:3px;
+  padding:8px 10px;display:flex;align-items:center;gap:7px;
+  box-shadow:0 6px 22px rgba(0,0,0,.9),inset 0 0 50px rgba(0,0,0,.55);
+  transition:all .22s;--cc:rgba(180,0,0,.78);
 }
+/* Top spirit-glow edge — color per card */
 .vs-card::before{
-  content:'';position:absolute;top:0;left:0;right:0;height:1.5px;
-  background:linear-gradient(90deg,transparent,var(--blood) 15%,var(--red) 50%,var(--ember) 65%,transparent 95%);
-  box-shadow:0 0 10px 1px rgba(204,17,0,.7);
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;z-index:3;
+  background:linear-gradient(90deg,transparent 0%,var(--cc) 22%,rgba(255,255,255,.45) 50%,var(--cc) 78%,transparent 100%);
+  box-shadow:0 0 9px 2px var(--cc);
 }
+/* CRT scan-line texture */
 .vs-card::after{
-  content:'';position:absolute;bottom:-30px;right:-18px;width:80px;height:80px;
-  background:radial-gradient(circle,rgba(139,0,0,.32),transparent 72%);
-  filter:blur(4px);pointer-events:none;
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:repeating-linear-gradient(0deg,transparent 0px,transparent 2px,rgba(0,0,0,.06) 2px,rgba(0,0,0,.06) 4px);
 }
-.vs-card:hover{border-color:rgba(204,17,0,.5);box-shadow:0 8px 20px rgba(139,0,0,.3),inset 0 0 0 1px rgba(0,0,0,.35);transform:translateY(-1px)}
-.vs-icon{font-size:1.2rem;flex-shrink:0;filter:drop-shadow(0 0 6px rgba(204,17,0,.5));position:relative;z-index:1}
-.vs-info{display:flex;flex-direction:column;gap:1px;position:relative;z-index:1}
-.vs-val{font-size:1.08rem;font-weight:800;color:#f2f2f2;text-shadow:0 0 12px rgba(204,17,0,.3);letter-spacing:.01em}
-.vs-val.green{color:#22dd66;text-shadow:0 0 14px rgba(34,221,102,.45)}
-.vs-label{font-size:.54rem;letter-spacing:.13em;text-transform:uppercase;color:var(--silver);opacity:.8}
+.vs-card:hover{border-color:var(--cc);box-shadow:0 0 20px -3px var(--cc),0 8px 26px rgba(0,0,0,.9);transform:translateY(-2px)}
+/* Per-card spirit colors */
+#node-stat-live{--cc:rgba(210,20,0,.85)}
+#node-stat-under{--cc:rgba(200,85,0,.85)}
+#node-stat-complete{--cc:rgba(105,0,195,.85)}
+#node-stat-alltime{--cc:rgba(0,185,65,.85)}
+#node-stat-aff{--cc:rgba(0,125,235,.85)}
+.vs-icon{font-size:.95rem;flex-shrink:0;filter:drop-shadow(0 0 7px var(--cc));position:relative;z-index:1}
+.vs-info{display:flex;flex-direction:column;gap:0px;position:relative;z-index:1}
+.vs-val{font-size:.88rem;font-weight:800;color:#ebebf4;text-shadow:0 0 10px var(--cc);letter-spacing:.01em}
+.vs-val.green{color:#22dd66;text-shadow:0 0 14px rgba(0,200,70,.6)}
+#node-stat-complete .vs-val{color:#bb44ff}
+#node-stat-aff .vs-val{color:#22aaff;text-shadow:0 0 12px rgba(0,140,255,.6)}
+.vs-label{font-size:.43rem;letter-spacing:.14em;text-transform:uppercase;color:rgba(160,160,190,.5);opacity:1}
+/* Value glitch on hover */
+@keyframes vsGlitch{0%,88%,100%{transform:none;opacity:1}91%{transform:translate(-2px,0);opacity:.75;filter:blur(.3px)}94%{transform:translate(2px,0);opacity:.9}97%{transform:none;opacity:1}}
+.vs-val:hover{animation:vsGlitch 1.8s infinite}
 
-/* Wolf watermark, faint, behind the content */
-.vs-wolf-bg{position:absolute;right:-16px;bottom:-20px;width:88px;height:88px;fill:#cc1100;opacity:.07;pointer-events:none;z-index:0}
+/* Wolf watermark — tinted per card spirit */
+.vs-wolf-bg{position:absolute;right:-14px;bottom:-18px;width:80px;height:80px;opacity:.09;pointer-events:none;z-index:0}
+#node-stat-live .vs-wolf-bg{fill:#cc1100}
+#node-stat-under .vs-wolf-bg{fill:#cc5500}
+#node-stat-complete .vs-wolf-bg{fill:#6600bb}
+#node-stat-alltime .vs-wolf-bg{fill:#00aa33}
+#node-stat-aff .vs-wolf-bg{fill:#0077cc}
 
-/* HUD corner brackets — Mission-Impossible / targeting-reticle look */
-.vs-corner{position:absolute;width:9px;height:9px;border:1.5px solid rgba(255,60,20,.55);pointer-events:none;z-index:2}
+/* HUD corner brackets */
+.vs-corner{position:absolute;width:7px;height:7px;border:1px solid rgba(255,60,20,.45);pointer-events:none;z-index:2}
 .vs-corner.tl{top:3px;left:3px;border-right:none;border-bottom:none}
 .vs-corner.tr{top:3px;right:3px;border-left:none;border-bottom:none}
 .vs-corner.bl{bottom:3px;left:3px;border-right:none;border-top:none}
 .vs-corner.br{bottom:3px;right:3px;border-left:none;border-top:none}
+#node-stat-live .vs-corner{border-color:rgba(200,20,0,.7)}
+#node-stat-under .vs-corner{border-color:rgba(195,80,0,.7)}
+#node-stat-complete .vs-corner{border-color:rgba(95,0,185,.7)}
+#node-stat-alltime .vs-corner{border-color:rgba(0,175,55,.7)}
+#node-stat-aff .vs-corner{border-color:rgba(0,115,225,.7)}
 
-/* Crawling energy ring — "lights up" as the flow line reaches this box */
+/* Crawling energy ring — per-card spirit color */
 .vs-crawl{position:absolute;inset:0;border-radius:inherit;padding:1.5px;pointer-events:none;z-index:1;
   background:conic-gradient(from 0deg,transparent 0%,transparent 78%,#ff6622 90%,#fff8f0 94%,#ff6622 98%,transparent 100%);
   -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
   -webkit-mask-composite:xor;mask-composite:exclude;
   opacity:0;animation:vsRotate 2.6s linear infinite;
 }
-#node-stat-live .vs-crawl{animation:vsRotate 2.6s linear infinite,vsGlowPulse 4.8s ease-in-out infinite;animation-delay:0s,0s}
-#node-stat-under .vs-crawl{animation:vsRotate 2.6s linear infinite,vsGlowPulse 4.8s ease-in-out infinite;animation-delay:0s,1.2s}
-#node-stat-complete .vs-crawl{animation:vsRotate 2.6s linear infinite,vsGlowPulse 4.8s ease-in-out infinite;animation-delay:0s,2.4s}
-#node-stat-alltime .vs-crawl{animation:vsRotate 2.6s linear infinite,vsGlowPulse 4.8s ease-in-out infinite;animation-delay:0s,3.6s}
+#node-stat-live .vs-crawl{background:conic-gradient(from 0deg,transparent 0%,transparent 78%,#cc1100 88%,#ff3300 93%,#cc1100 98%,transparent 100%);animation:vsRotate 2.6s linear infinite,vsGlowPulse 4.8s ease-in-out infinite;animation-delay:0s,0s}
+#node-stat-under .vs-crawl{background:conic-gradient(from 0deg,transparent 0%,transparent 78%,#cc5500 88%,#ff8800 93%,#cc5500 98%,transparent 100%);animation:vsRotate 2.6s linear infinite,vsGlowPulse 4.8s ease-in-out infinite;animation-delay:0s,1.2s}
+#node-stat-complete .vs-crawl{background:conic-gradient(from 0deg,transparent 0%,transparent 78%,#6600bb 88%,#9900ff 93%,#6600bb 98%,transparent 100%);animation:vsRotate 2.6s linear infinite,vsGlowPulse 4.8s ease-in-out infinite;animation-delay:0s,2.4s}
+#node-stat-alltime .vs-crawl{background:conic-gradient(from 0deg,transparent 0%,transparent 78%,#00aa33 88%,#00ff55 93%,#00aa33 98%,transparent 100%);animation:vsRotate 2.6s linear infinite,vsGlowPulse 4.8s ease-in-out infinite;animation-delay:0s,3.6s}
+#node-stat-aff .vs-crawl{background:conic-gradient(from 0deg,transparent 0%,transparent 78%,#0077cc 88%,#00bbff 93%,#0077cc 98%,transparent 100%);animation:vsRotate 2.6s linear infinite,vsGlowPulse 4.8s ease-in-out infinite;animation-delay:0s,4.8s}
 @keyframes vsRotate{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 @keyframes vsGlowPulse{0%,19%,31%,100%{opacity:0}25%{opacity:1}}
 
@@ -536,19 +559,19 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
         <svg class="vs-wolf-bg"><use href="#wolf-glyph" width="100%" height="100%"/></svg>
         <i class="vs-crawl"></i>
         <i class="vs-corner tl"></i><i class="vs-corner tr"></i><i class="vs-corner bl"></i><i class="vs-corner br"></i>
-        <span class="vs-icon">🎬</span><div class="vs-info"><span class="vs-val" id="stat-live">0</span><span class="vs-label">Live Operations</span></div>
+        <span class="vs-icon">🐺</span><div class="vs-info"><span class="vs-val" id="stat-live">0</span><span class="vs-label">Live Operations</span></div>
       </div>
       <div class="vs-card" id="node-stat-under">
         <svg class="vs-wolf-bg"><use href="#wolf-glyph" width="100%" height="100%"/></svg>
         <i class="vs-crawl"></i>
         <i class="vs-corner tl"></i><i class="vs-corner tr"></i><i class="vs-corner bl"></i><i class="vs-corner br"></i>
-        <span class="vs-icon">⚙️</span><div class="vs-info"><span class="vs-val" id="stat-under">0</span><span class="vs-label">Undergoing Ops</span></div>
+        <span class="vs-icon">⚔️</span><div class="vs-info"><span class="vs-val" id="stat-under">0</span><span class="vs-label">Undergoing Ops</span></div>
       </div>
       <div class="vs-card" id="node-stat-complete">
         <svg class="vs-wolf-bg"><use href="#wolf-glyph" width="100%" height="100%"/></svg>
         <i class="vs-crawl"></i>
         <i class="vs-corner tl"></i><i class="vs-corner tr"></i><i class="vs-corner bl"></i><i class="vs-corner br"></i>
-        <span class="vs-icon">🩸</span><div class="vs-info"><span class="vs-val" id="stat-complete">—</span><span class="vs-label">Avg Completion</span></div>
+        <span class="vs-icon">💀</span><div class="vs-info"><span class="vs-val" id="stat-complete">—</span><span class="vs-label">Avg Completion</span></div>
       </div>
       <div class="vs-card" id="node-stat-alltime">
         <svg class="vs-wolf-bg"><use href="#wolf-glyph" width="100%" height="100%"/></svg>
@@ -560,7 +583,7 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
         <svg class="vs-wolf-bg"><use href="#wolf-glyph" width="100%" height="100%"/></svg>
         <i class="vs-crawl"></i>
         <i class="vs-corner tl"></i><i class="vs-corner tr"></i><i class="vs-corner bl"></i><i class="vs-corner br"></i>
-        <span class="vs-icon">🤝</span><div class="vs-info"><span class="vs-val" style="color:#22aaff" id="stat-aff">$0</span><span class="vs-label">Affiliate Revenue</span></div>
+        <span class="vs-icon">👻</span><div class="vs-info"><span class="vs-val" id="stat-aff">$0</span><span class="vs-label">Affiliate Revenue</span></div>
       </div>
     </div>
 
