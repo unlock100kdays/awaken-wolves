@@ -2449,7 +2449,7 @@ function guessCsvMap(headers){
   const f=(...ks)=>headers.findIndex(h=>ks.some(k=>h.includes(k)));
   return{
     date: f('order date','date','time','sold','created'),
-    amount: f('price','commission','affiliate earn','affiliate amount','your earn','net earn','amount','revenue','gross','sale','total'),
+    amount: f('payout','price','commission','affiliate earn','affiliate amount','your earn','net earn','amount','revenue','gross','sale','total'),
     type: f('type','status','purchase type'),
     product: f('product name','product','title','item','funnel','offer'),
   };
@@ -2462,6 +2462,7 @@ function aggCsvRows(rows,map){
     /* Handle "33.04 $", "$ 33.04", "-66.25 $", "1,234.56" etc. */
     const amt=parseFloat(ra.replace(/[^0-9.\-]/g,''))||0;
     const rt=map.type>=0?(row[map.type]||'').toLowerCase().trim():'';
+    if(rt==='n/a')continue; // free trial / no commission earned
     /* Classify by explicit type column first; fall back to sign of amount */
     const isRef=rt==='refund'||rt.includes('refund')||(rt===''&&amt<0);
     const isCB=rt.includes('chargeback')||rt.includes('charge')||rt.includes('dispute');
@@ -2618,6 +2619,8 @@ function renderAffStats(card){
   const csv=JSON.parse(card.dataset.csv||'null');
   const wrap=card.querySelector('.aff-stats-wrap');
   if(!wrap)return;
+  const platform=card.dataset.platform||'';
+  const isCsvOnly=platform==='JVzoo'||platform==='Explodely'||platform==='Other';
   let html='';
 
   if(raw){
@@ -2644,7 +2647,11 @@ function renderAffStats(card){
       </div>`;
     }
   } else {
-    html+=`<div class="api-err-box"><div class="api-err-ico">🤝</div><div class="api-err-msg">No API data — enter credentials when adding or click Refresh.</div><button class="api-retry-btn" onclick="refreshAffCard('${card.dataset.id}')">↻ Refresh</button></div>`;
+    if(isCsvOnly){
+      html+=`<div class="api-err-box"><div class="api-err-ico">📂</div><div class="api-err-msg" style="font-size:.58rem;line-height:1.5">Import your CSV history using the button above.<br>Live sales will appear here automatically via IPN postback.</div></div>`;
+    } else {
+      html+=`<div class="api-err-box"><div class="api-err-ico">🤝</div><div class="api-err-msg">No API data — enter credentials when adding or click Refresh.</div><button class="api-retry-btn" onclick="refreshAffCard('${card.dataset.id}')">↻ Refresh</button></div>`;
+    }
   }
 
   if(csv){
