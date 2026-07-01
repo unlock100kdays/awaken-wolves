@@ -2293,7 +2293,9 @@ function chooseAffPlatform(el){
   MAAffName=name; MAPlat=el.dataset.plat;
   document.querySelectorAll('#modal-affiliate .plat-chip').forEach(c=>c.classList.remove('selected'));
   el.classList.add('selected');
-  if(MAPlat==='Other'||MAPlat==='Explodely'){showAffStep('aff-step-csv');return;}
+  /* JVZoo has no affiliate earnings API — only vendor transactions are exposed.
+     Affiliate data must come from CSV export + IPN postback for live tracking. */
+  if(MAPlat==='Other'||MAPlat==='Explodely'||MAPlat==='JVzoo'){showAffStep('aff-step-csv');return;}
   const hints={
     JVzoo:'Your JVZoo API key — same key works for vendor + affiliate. Account → My Account → API Keys',
     Explodely:'Your Explodely affiliate username + API key',
@@ -2342,7 +2344,8 @@ async function finalizeAffConnect(){
 }
 
 async function fetchAffApiData(platform,creds,dateRange){
-  if(platform==='JVzoo') return await fetchJvzooAffData(creds.apiKey,dateRange);
+  /* JVZoo /v3.0/transactions only returns vendor sales — no affiliate earnings API exists */
+  if(platform==='JVzoo') return null;
   if(platform==='Explodely') return await fetchExplAffData(creds.username,creds.apiKey,dateRange);
   return null;
 }
@@ -2601,7 +2604,7 @@ function createAffCard(name,platform,raw,csvData,col,id,ipnToken,dateRange,fromR
         <div class="ipn-url-label">Postback / IPN URL — paste into your platform settings</div>
         <div class="ipn-url-box">${escHtml(pbUrl)}</div>
         <button class="copy-btn" onclick="navigator.clipboard.writeText('${pbUrl.replace(/'/g,"\\'")}').then(()=>{this.textContent='✓ Copied!';setTimeout(()=>this.textContent='📋 Copy URL',1600)})">📋 Copy URL</button>
-        <div style="font-size:.48rem;color:rgba(120,160,255,.3);margin-top:4px;line-height:1.5">JVZoo: Account → IPN URL &nbsp;·&nbsp; Explodely: Affiliate Settings → Postback URL &nbsp;·&nbsp; Requires Cloudflare KV — see setup note below.</div>
+        <div style="font-size:.48rem;color:rgba(120,160,255,.3);margin-top:4px;line-height:1.5">JVZoo affiliate: Account → My Account → IPN URL &nbsp;·&nbsp; Explodely: Affiliate Settings → ISN URL &nbsp;·&nbsp; Historical data via Import CSV above.</div>
       </div>
     </div>`;
 
@@ -2753,7 +2756,7 @@ async function refreshAffCard(cardId){
   if(wrap)wrap.innerHTML='<div style="color:var(--silver);font-size:.6rem;padding:8px 0">Fetching…</div>';
   let creds=null;
   try{creds=JSON.parse(localStorage.getItem('aff_cred::'+platform)||'null');}catch{}
-  if(!creds||platform==='Other'||platform==='Explodely'){if(wrap)wrap.innerHTML='<div style="color:#ee8800;font-size:.6rem;padding:4px 0">Explodely affiliate has no API — import your CSV export to update data.</div>';renderAffStats(card);return;}
+  if(!creds||platform==='Other'||platform==='Explodely'||platform==='JVzoo'){if(wrap)wrap.innerHTML='<div style="color:#ee8800;font-size:.6rem;padding:4px 0">JVZoo/Explodely affiliate data via CSV only — use Import CSV to update, and set IPN URL for live tracking.</div>';renderAffStats(card);return;}
   try{
     const raw=await fetchAffApiData(platform,creds,dateRange);
     card.dataset.raw=JSON.stringify(raw||null);
