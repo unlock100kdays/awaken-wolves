@@ -197,6 +197,40 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 .oc-body{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
 .oc-body.collapsed{display:none}
 
+/* AFFILIATE OPS */
+.aff-section{border-color:rgba(0,80,180,.22)!important}
+.aff-section .sub-header{border-bottom-color:rgba(0,80,180,.18)}
+.aff-add-btn{border-color:rgba(0,80,180,.35)!important;color:rgba(100,160,255,.8)!important}
+.aff-add-btn:hover{border-color:rgba(0,120,255,.6)!important;color:#22aaff!important}
+.aff-card{background:rgba(4,8,22,.92);border:1px solid rgba(0,80,180,.25);border-radius:6px;overflow:hidden;position:relative;transition:border-color .2s}
+.aff-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,140,255,.7),transparent)}
+.aff-card:hover{border-color:rgba(0,120,255,.42)}
+.aff-header{padding:9px 12px;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(0,80,180,.14);cursor:pointer;user-select:none}
+.aff-name{font-size:.8rem;font-weight:700;color:#e0e0e0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aff-comm{font-size:.76rem;font-weight:700;color:#22aaff;flex-shrink:0;white-space:nowrap}
+.aff-live{font-size:.58rem;color:#2288ff;letter-spacing:.05em;display:flex;align-items:center;gap:3px;flex-shrink:0}
+.aff-live::before{content:'';width:5px;height:5px;border-radius:50%;background:#2288ff;display:inline-block;animation:pulse 1.2s infinite;flex-shrink:0}
+.aff-toggle{color:var(--silver);font-size:.7rem;transition:transform .2s;flex-shrink:0}
+.aff-toggle.open{transform:rotate(180deg)}
+.aff-remove{color:rgba(0,80,180,.4);cursor:pointer;font-size:.95rem;padding:0 2px;transition:color .15s;flex-shrink:0;background:none;border:none;font-family:inherit}
+.aff-remove:hover{color:#0088ff}
+.aff-body{padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.aff-body.collapsed{display:none}
+.aff-badge{font-size:.55rem;letter-spacing:.08em;text-transform:uppercase;padding:2px 6px;border-radius:3px;white-space:nowrap;flex-shrink:0}
+.aff-section-label{font-size:.5rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(100,150,255,.45);margin-top:4px;margin-bottom:2px}
+.csv-import-area{border:1px dashed rgba(0,80,180,.3);border-radius:4px;padding:14px;text-align:center;cursor:pointer;transition:all .2s;background:rgba(0,50,150,.04)}
+.csv-import-area:hover,.csv-import-area.drag-over{border-color:rgba(0,140,255,.6);background:rgba(0,80,180,.07)}
+.csv-import-area p{font-size:.65rem;color:rgba(150,180,255,.55);margin:0}
+.csv-tag{font-size:.48rem;letter-spacing:.1em;text-transform:uppercase;padding:1px 5px;border-radius:3px;background:rgba(0,180,100,.1);border:1px solid rgba(0,180,100,.2);color:#22cc88;vertical-align:middle}
+.csv-section{border-top:1px solid rgba(0,80,180,.12);margin-top:6px;padding-top:6px}
+.ipn-url-wrap{margin-top:2px}
+.ipn-url-label{font-size:.48rem;letter-spacing:.12em;text-transform:uppercase;color:rgba(120,160,255,.38);margin-bottom:3px}
+.ipn-url-box{background:rgba(0,60,160,.05);border:1px solid rgba(0,80,180,.14);border-radius:4px;padding:5px 8px;font-size:.52rem;letter-spacing:.02em;color:#7898cc;word-break:break-all;font-family:monospace}
+.copy-btn{font-size:.52rem;padding:2px 8px;background:rgba(0,80,180,.1);border:1px solid rgba(0,120,255,.18);border-radius:3px;color:#22aaff;cursor:pointer;transition:all .2s;font-family:inherit;letter-spacing:.05em;margin-top:4px}
+.copy-btn:hover{background:rgba(0,120,255,.18)}
+.ipn-notify{font-size:.58rem;color:#22aaff;background:rgba(0,80,200,.08);border:1px solid rgba(0,100,255,.18);border-radius:4px;padding:5px 8px;margin-bottom:4px;display:none}
+.aff-card.dragging{opacity:.35}
+
 /* DRAG REORDER */
 .drag-handle{color:rgba(255,255,255,.25);cursor:grab;font-size:.85rem;flex-shrink:0;padding:0 2px;letter-spacing:-2px}
 .drag-handle:hover{color:rgba(255,255,255,.6)}
@@ -529,6 +563,14 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
             </div>
           </div>
         </div>
+        <div class="sub-section aff-section" id="node-aff-bizops">
+          <div class="sub-header">
+            <div class="sub-dot" style="--dc:#0088ff"></div>
+            <span class="sub-title">Affiliate Ops</span>
+            <button class="sub-add-btn aff-add-btn" onclick="openAddAffiliate('bizops')">+ Add Affiliate</button>
+          </div>
+          <div class="sub-body" id="list-aff-bizops"><div class="empty-state">No affiliate accounts. Click + to connect one.</div></div>
+        </div>
         <div class="sub-section" id="node-under-bizops">
           <div class="sub-header">
             <div class="sub-dot" style="--dc:#ff8800"></div>
@@ -566,6 +608,14 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
               <div class="sn-footer"><span class="sn-saved" id="sns-live-nutra">✓ Saved</span><button class="sn-save-btn" onclick="saveSN('snta-live-nutra','sns-live-nutra')">Save</button></div>
             </div>
           </div>
+        </div>
+        <div class="sub-section aff-section" id="node-aff-nutra">
+          <div class="sub-header">
+            <div class="sub-dot" style="--dc:#0088ff"></div>
+            <span class="sub-title">Affiliate Ops</span>
+            <button class="sub-add-btn aff-add-btn" onclick="openAddAffiliate('nutra')">+ Add Affiliate</button>
+          </div>
+          <div class="sub-body" id="list-aff-nutra"><div class="empty-state">No affiliate accounts. Click + to connect one.</div></div>
         </div>
         <div class="sub-section" id="node-under-nutra">
           <div class="sub-header">
@@ -701,6 +751,96 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
   </div>
 </div>
 
+<!-- ═══ MODAL: ADD AFFILIATE ACCOUNT ═══ -->
+<div class="modal-overlay" id="modal-affiliate">
+  <div class="modal">
+    <div class="modal-title">🤝 Add Affiliate Account</div>
+    <div id="aff-step-plat" class="m-step active">
+      <div class="form-group">
+        <label class="form-label">Account Nickname</label>
+        <input class="form-input" id="inp-aff-name" placeholder="e.g. JVZoo Affiliate, Explodely Promos…"/>
+      </div>
+      <div class="form-group">
+        <div class="form-label">Platform</div>
+        <div class="plat-chips">
+          <div class="plat-chip" data-plat="JVzoo" onclick="chooseAffPlatform(this)">JVzoo</div>
+          <div class="plat-chip" data-plat="Explodely" onclick="chooseAffPlatform(this)">Explodely</div>
+          <div class="plat-chip" data-plat="Clickbank" onclick="chooseAffPlatform(this)">Clickbank</div>
+          <div class="plat-chip" data-plat="Digistore" onclick="chooseAffPlatform(this)">Digistore</div>
+          <div class="plat-chip" data-plat="Other" onclick="chooseAffPlatform(this)">Other / CSV Only</div>
+        </div>
+      </div>
+    </div>
+    <div id="aff-step-creds" class="m-step">
+      <div id="aff-username-row" style="display:none">
+        <div class="form-group">
+          <label class="form-label" id="aff-username-label">Username</label>
+          <input class="form-input" id="inp-aff-username" type="text" placeholder="Your platform username…"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" id="aff-apikey-label">Affiliate API Key</label>
+        <input class="form-input" id="inp-aff-api-key" type="password" placeholder="Paste your affiliate API key…"/>
+        <div class="form-hint" id="aff-apikey-hint"></div>
+      </div>
+      <div class="status-msg" id="aff-creds-status"></div>
+      <div class="modal-btns">
+        <button class="btn-primary" onclick="submitAffCreds()">Verify &amp; Continue →</button>
+        <button class="btn-secondary" onclick="closeModal('modal-affiliate')">Cancel</button>
+      </div>
+    </div>
+    <div id="aff-step-csv" class="m-step">
+      <div class="form-group">
+        <label class="form-label">Import Historical Data <span style="font-size:.6rem;color:var(--silver);font-weight:400">— optional, skip to use API only</span></label>
+        <div class="csv-import-area" id="aff-csv-drop"
+             onclick="document.getElementById('aff-csv-file').click()"
+             ondragover="event.preventDefault();this.classList.add('drag-over')"
+             ondragleave="this.classList.remove('drag-over')"
+             ondrop="handleAffCsvDrop(event)">
+          <p>📂 Click or drag &amp; drop a CSV file</p>
+          <p style="margin-top:4px;font-size:.57rem">JVZoo / Explodely / ClickBank export, or generic CSV with Date, Amount, Type columns</p>
+        </div>
+        <input type="file" id="aff-csv-file" accept=".csv,.txt" style="display:none" onchange="handleAffCsvFile(this)"/>
+        <div id="aff-csv-preview" style="margin-top:8px"></div>
+      </div>
+      <div class="modal-btns">
+        <button class="btn-primary" onclick="finalizeAffConnect()">🤝 Add Account</button>
+        <button class="btn-secondary" onclick="closeModal('modal-affiliate')">Cancel</button>
+      </div>
+    </div>
+    <div id="aff-step-loading" class="m-step">
+      <div class="step-loading-body">
+        <div class="step-loading-icon">🤝</div>
+        <div class="step-loading-msg" id="aff-loading-msg">Connecting…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: CSV IMPORT (existing aff cards) ═══ -->
+<div class="modal-overlay" id="modal-csv">
+  <div class="modal">
+    <div class="modal-title">📂 Import Historical Data</div>
+    <div class="form-group">
+      <label class="form-label">Drop or select your CSV export</label>
+      <div class="csv-import-area" id="csv-drop-main"
+           onclick="document.getElementById('csv-file-main').click()"
+           ondragover="event.preventDefault();this.classList.add('drag-over')"
+           ondragleave="this.classList.remove('drag-over')"
+           ondrop="handleCsvDrop(event)">
+        <p>📂 Click or drag &amp; drop CSV here</p>
+        <p style="margin-top:4px;font-size:.57rem">JVZoo, Explodely, ClickBank exports or generic (Date, Amount, Type, Product)</p>
+      </div>
+      <input type="file" id="csv-file-main" accept=".csv,.txt" style="display:none" onchange="handleCsvFileMain(this)"/>
+    </div>
+    <div id="csv-preview-main" style="margin-top:8px"></div>
+    <div class="modal-btns">
+      <button class="btn-primary" id="btn-csv-apply" onclick="applyMainCsv()" disabled>📥 Import Data</button>
+      <button class="btn-secondary" onclick="closeModal('modal-csv')">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ══════════════════════════════════════════
    INIT
@@ -738,7 +878,7 @@ const N_KEY  = 'aww_vsl_notes';
 
 function loadState(){try{return JSON.parse(localStorage.getItem(S_KEY))||null;}catch{return null;}}
 function saveState(){
-  const state={bizops:{live:[],under:[]},nutra:{live:[],under:[]}};
+  const state={bizops:{live:[],under:[],aff:[]},nutra:{live:[],under:[],aff:[]}};
   ['bizops','nutra'].forEach(col=>{
     document.querySelectorAll(`#list-live-${col} .offer-card`).forEach(c=>{
       state[col].live.push({id:c.dataset.id,name:c.dataset.name,platform:c.dataset.platform,offerId:c.dataset.offerid,raw:JSON.parse(c.dataset.blob||'null'),dateRange:c.dataset.daterange||'thismonth'});
@@ -751,6 +891,9 @@ function saveState(){
         cl[g.dataset.item]={done,notes};
       });
       state[col].under.push({id:c.dataset.id,name:c.dataset.name,pm:c.dataset.pm,vsl:c.dataset.vsl,script:c.dataset.script,deadline:c.dataset.deadline,checklist:cl});
+    });
+    document.querySelectorAll(`#list-aff-${col} .aff-card`).forEach(c=>{
+      state[col].aff.push({id:c.dataset.id,name:c.dataset.name,platform:c.dataset.platform,ipntoken:c.dataset.ipntoken,dateRange:c.dataset.daterange||'thismonth',raw:JSON.parse(c.dataset.raw||'null'),csv:JSON.parse(c.dataset.csv||'null')});
     });
   });
   localStorage.setItem(S_KEY,JSON.stringify(state));
@@ -775,6 +918,10 @@ function restoreAll(){
       if(state[col]?.under?.length){
         document.getElementById(`list-under-${col}`).innerHTML='';
         state[col].under.forEach(p=>createProjectCardFromData(p,col,true));
+      }
+      if(state[col]?.aff?.length){
+        document.getElementById(`list-aff-${col}`).innerHTML='';
+        state[col].aff.forEach(a=>createAffCard(a.name,a.platform,a.raw,a.csv,col,a.id,a.ipntoken,a.dateRange,true));
       }
     });
   }
@@ -1786,7 +1933,7 @@ function createOfferCard(name,platform,raw,col,id,offerId,fromRestore,apiErr,sta
 
 function toggleCard(header,bodyClass){
   const body=header.nextElementSibling;
-  const tog=header.querySelector('.oc-toggle,.pc-toggle');
+  const tog=header.querySelector('.oc-toggle,.pc-toggle,.aff-toggle');
   const c=body.classList.toggle('collapsed');
   if(tog)tog.classList.toggle('open',!c);
 }
@@ -2088,6 +2235,397 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 /* ══════════════════════════════════════════
+   AFFILIATE OPS
+══════════════════════════════════════════ */
+let MAC='bizops', MAPlat=null, MAAffName='', MAAffCsvData=null;
+
+function showAffStep(id){
+  ['aff-step-plat','aff-step-creds','aff-step-csv','aff-step-loading'].forEach(s=>{
+    document.getElementById(s).classList.toggle('active',s===id);
+  });
+}
+
+function openAddAffiliate(col){
+  MAC=col; MAPlat=null; MAAffName=''; MAAffCsvData=null;
+  document.getElementById('inp-aff-name').value='';
+  document.getElementById('inp-aff-username').value='';
+  document.getElementById('inp-aff-api-key').value='';
+  document.getElementById('aff-csv-preview').innerHTML='';
+  document.getElementById('aff-creds-status').textContent='';
+  document.querySelectorAll('#modal-affiliate .plat-chip').forEach(c=>c.classList.remove('selected'));
+  showAffStep('aff-step-plat');
+  document.getElementById('modal-affiliate').classList.add('open');
+}
+
+function chooseAffPlatform(el){
+  const name=document.getElementById('inp-aff-name').value.trim();
+  if(!name){
+    const i=document.getElementById('inp-aff-name');i.style.borderColor='rgba(220,0,0,.7)';
+    setTimeout(()=>i.style.borderColor='',1200);return;
+  }
+  MAAffName=name; MAPlat=el.dataset.plat;
+  document.querySelectorAll('#modal-affiliate .plat-chip').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');
+  if(MAPlat==='Other'){showAffStep('aff-step-csv');return;}
+  const hints={
+    JVzoo:'Your JVZoo Affiliate API key — Account → My Account → API Keys',
+    Explodely:'Your Explodely affiliate username + API key',
+    Clickbank:'Dev API Key from ClickBank Account Settings → API Keys',
+    Digistore:'API key from DigiStore24 Settings → API',
+  };
+  document.getElementById('aff-apikey-hint').textContent=hints[MAPlat]||'';
+  const needsUser=MAPlat==='Explodely';
+  document.getElementById('aff-username-row').style.display=needsUser?'':'none';
+  document.getElementById('aff-apikey-label').textContent=
+    MAPlat==='JVzoo'?'Affiliate API Key':MAPlat==='Clickbank'?'Dev API Key':'API Key';
+  showAffStep('aff-step-creds');
+}
+
+async function submitAffCreds(){
+  const key=document.getElementById('inp-aff-api-key').value.trim();
+  const user=document.getElementById('inp-aff-username').value.trim();
+  const status=document.getElementById('aff-creds-status');
+  if(!key){status.textContent='Enter your API key.';status.style.color='#ee2200';return;}
+  status.textContent='Verifying…';status.style.color='var(--silver)';
+  try{
+    let ok=false,err='';
+    if(MAPlat==='JVzoo'){const r=await proxyPost({platform:'JVzoo',apiKey:key,action:'fetchTxChunk',dateRange:'today',pageOffset:0,pageLimit:1});ok=r.success;err=r.error||'';}
+    else if(MAPlat==='Explodely'){const r=await proxyPost({platform:'Explodely',apiKey:key,username:user,action:'fetchOffers'});ok=r.success;err=r.error||'';}
+    else{ok=true;}
+    if(!ok){status.textContent='❌ '+err;status.style.color='#ee2200';return;}
+    try{localStorage.setItem('aff_cred::'+MAPlat,JSON.stringify({apiKey:key,username:user,savedAt:Date.now()}));}catch{}
+    status.textContent='✓ Credentials verified!';status.style.color='#22dd66';
+    setTimeout(()=>showAffStep('aff-step-csv'),700);
+  }catch(e){status.textContent='❌ '+e.message;status.style.color='#ee2200';}
+}
+
+async function finalizeAffConnect(){
+  showAffStep('aff-step-loading');
+  const msg=document.getElementById('aff-loading-msg');
+  msg.textContent='Fetching affiliate data…';
+  let creds=null,raw=null;
+  if(MAPlat&&MAPlat!=='Other'){
+    try{creds=JSON.parse(localStorage.getItem('aff_cred::'+MAPlat)||'null');}catch{}
+  }
+  if(creds&&MAPlat){
+    try{msg.textContent=`Pulling ${MAPlat} data…`;raw=await fetchAffApiData(MAPlat,creds,'thismonth');}catch(e){raw=null;}
+  }
+  createAffCard(MAAffName,MAPlat||'Other',raw,MAAffCsvData,MAC,uid(),genIpnToken(),'thismonth',false);
+  closeModal('modal-affiliate');
+}
+
+async function fetchAffApiData(platform,creds,dateRange){
+  if(platform==='JVzoo') return await fetchJvzooAffData(creds.apiKey,dateRange);
+  if(platform==='Explodely') return await fetchExplAffData(creds.username,creds.apiKey,dateRange);
+  return null;
+}
+
+async function fetchJvzooAffData(apiKey,dateRange){
+  const all=[];let offset=0;
+  while(true){
+    const r=await proxyPost({platform:'JVzoo',apiKey,action:'fetchTxChunk',dateRange,pageOffset:offset,pageLimit:15});
+    if(!r.success) throw new Error(r.error||'JVZoo error');
+    all.push(...(r.transactions||[]));
+    const next=r.meta?.next_offset;
+    if(next==null) break;
+    offset=next;
+    if(all.length>30000) break;
+  }
+  return aggregateJvzooAffiliate(all,dateRange);
+}
+
+async function fetchExplAffData(username,apiKey,dateRange){
+  const now=new Date();
+  const MN=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+  const exd=d=>`${String(d.getDate()).padStart(2,'0')}-${MN[d.getMonth()]}-${d.getFullYear()}`;
+  let sd,ed=exd(now);
+  if(dateRange==='today'){sd=ed;}
+  else if(dateRange==='yesterday'){const y=new Date(now-86400000);sd=ed=exd(y);}
+  else if(dateRange==='last7'){sd=exd(new Date(now-6*86400000));}
+  else if(dateRange==='thismonth'){sd=exd(new Date(now.getFullYear(),now.getMonth(),1));}
+  else if(dateRange==='lastmonth'){const lm=new Date(now.getFullYear(),now.getMonth()-1,1);sd=exd(lm);ed=exd(new Date(now.getFullYear(),now.getMonth(),0));}
+  else{sd='01-jan-2024';}
+  const r=await proxyPost({platform:'Explodely',username,apiKey,action:'fetchExplChunk',startdate:sd,enddate:ed});
+  if(!r.success) throw new Error(r.error||'Explodely error');
+  return aggregateExplAffiliate(r.sales||[]);
+}
+
+function aggregateJvzooAffiliate(txs,dateRange){
+  let comm=0,refComm=0,sales=0,refs=0,cbs=0,lastTs=0;
+  const pm={};const recent=[];
+  for(const tx of txs){
+    const ae=parseFloat(tx.payouts?.affiliate_earnings??0)||0;
+    const st=String(tx.status??'').toUpperCase();
+    const isRef=st.includes('REFUND');
+    const isCB=st.includes('CHARG')||st.includes('DISPUT')||st.includes('CGBK');
+    const isSale=!isRef&&!isCB;
+    const pid=String(tx.product_id??'_unk');
+    const pn=tx.product_name??pid;
+    let ts=0;if(tx.sale_date){const d=new Date(tx.sale_date);if(!isNaN(d))ts=Math.floor(d.getTime()/1000);}
+    if(!pm[pid])pm[pid]={id:pid,name:pn,commission:0,sales:0,refunds:0};const p=pm[pid];
+    if(isSale){comm+=ae;sales++;if(ts>lastTs)lastTs=ts;p.commission+=ae;p.sales++;}
+    else if(isRef){refComm+=ae;refs++;p.refunds++;}
+    else if(isCB){refComm+=ae;cbs++;}
+    if(recent.length<20&&(isSale||isRef||isCB))recent.push({date:ts?new Date(ts*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}):'-',type:isRef?'refund':isCB?'chargeback':'sale',amount:ae,product:pn!==pid?pn:''});
+  }
+  return{isAffiliate:true,commission_gross:comm,commission_net:comm-refComm,commission_refunded:refComm,total_revenue:comm-refComm,total_orders:sales,total_refunds:refs,total_chargebacks:cbs,refund_rate:sales>0?(refs/sales*100):0,last_sale_date:lastTs?new Date(lastTs*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'-',aff_products:Object.values(pm).sort((a,b)=>b.commission-a.commission).slice(0,15),recent_transactions:recent,date_range:dateRange};
+}
+
+function aggregateExplAffiliate(sales){
+  let revenue=0,refs=0,cbs=0,count=0,lastTs=0;
+  const pm={};const recent=[];
+  for(const s of sales){
+    const amt=parseFloat(s.amount??0)||0;const type=String(s.type??'sale').toLowerCase();
+    const isRef=type==='refund';const isCB=type==='chargeback';const isSale=!isRef&&!isCB;
+    const ts=parseInt(s.saletimestamp||0);const pn=s.productName||String(s.productId||'—');const pid=String(s.productId||pn);
+    if(!pm[pid])pm[pid]={id:pid,name:pn,commission:0,sales:0,refunds:0};const p=pm[pid];
+    if(isSale){revenue+=amt;count++;if(ts>lastTs)lastTs=ts;p.commission+=amt;p.sales++;}
+    else if(isRef){refs++;p.refunds++;}else if(isCB){cbs++;}
+    if(recent.length<20)recent.push({date:ts?new Date(ts*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}):'-',type,amount:amt,product:pn});
+  }
+  return{isAffiliate:true,commission_gross:revenue,commission_net:revenue,commission_refunded:0,total_revenue:revenue,total_orders:count,total_refunds:refs,total_chargebacks:cbs,refund_rate:count>0?(refs/count*100):0,last_sale_date:lastTs?new Date(lastTs*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'-',aff_products:Object.values(pm).sort((a,b)=>b.commission-a.commission).slice(0,15),recent_transactions:recent};
+}
+
+/* ── CSV IMPORT ── */
+let csvParsed=null,csvTargetCardId=null;
+
+function parseCsv(text){
+  const lines=text.trim().split(/\r?\n/);if(lines.length<2)return null;
+  const delim=lines[0].includes('\t')?'\t':',';
+  const split=l=>{const res=[];let cur='',inQ=false;for(const c of l){if(c==='"'){inQ=!inQ;}else if(c===delim&&!inQ){res.push(cur.trim());cur='';}else cur+=c;}res.push(cur.trim());return res;};
+  const headers=split(lines[0]).map(h=>h.replace(/^"|"$/g,'').toLowerCase().trim());
+  const rows=lines.slice(1).map(l=>split(l)).filter(r=>r.join('').trim()&&r.length>=2);
+  return{headers,rows};
+}
+function guessCsvMap(headers){
+  const f=(...ks)=>headers.findIndex(h=>ks.some(k=>h.includes(k)));
+  return{
+    date:f('date','time','sold','created'),
+    amount:f('commission','affiliate earn','affiliate amount','your earn','net earn','amount','revenue','price','gross','sale','total'),
+    type:f('type','status','purchase type'),
+    product:f('product','title','item','funnel','offer'),
+  };
+}
+function aggCsvRows(rows,map){
+  let comm=0,refC=0,cnt=0,refs=0,cbs=0;const pm={};const recent=[];
+  for(const row of rows){
+    const ra=map.amount>=0?(row[map.amount]||'0'):'0';
+    const amt=parseFloat(ra.replace(/[$,€£\s]/g,''))||0;
+    const rt=map.type>=0?(row[map.type]||'sale').toLowerCase():'sale';
+    const isRef=rt.includes('refund');const isCB=rt.includes('charge')||rt.includes('dispute');const isSale=!isRef&&!isCB;
+    const pn=map.product>=0?(row[map.product]||'—'):'—';
+    const ds=map.date>=0?(row[map.date]||''):'';
+    let ts=0;if(ds){const d=new Date(ds);if(!isNaN(d))ts=Math.floor(d.getTime()/1000);}
+    if(!pm[pn])pm[pn]={name:pn,commission:0,sales:0,refunds:0};const p=pm[pn];
+    if(isSale){comm+=amt;cnt++;p.commission+=amt;p.sales++;}
+    else if(isRef){refC+=amt;refs++;p.refunds++;}else if(isCB){cbs++;}
+    if(recent.length<20)recent.push({date:ts?new Date(ts*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}):ds.slice(0,10)||'-',type:isRef?'refund':isCB?'chargeback':'sale',amount:amt,product:pn});
+  }
+  return{csv_sales:cnt,csv_commission:comm,csv_refunds:refs,csv_chargebacks:cbs,csv_refund_comm:refC,csv_net:comm-refC,csv_refund_rate:cnt>0?(refs/cnt*100):0,csv_products:Object.values(pm).sort((a,b)=>b.commission-a.commission).slice(0,15),csv_recent:recent,imported_at:Date.now()};
+}
+function showCsvPreview(agg,rows,elId){
+  document.getElementById(elId).innerHTML=`<div style="background:rgba(0,80,180,.06);border:1px solid rgba(0,80,180,.2);border-radius:4px;padding:8px 10px"><div style="font-size:.58rem;color:#22aaff;font-weight:700;margin-bottom:4px">✓ ${rows} rows parsed</div><div style="font-size:.6rem;color:var(--silver)">Sales: <b style="color:#e0e0e0">${agg.csv_sales}</b> &nbsp;·&nbsp; Commission: <b style="color:#22aaff">${fmt(agg.csv_commission)}</b> &nbsp;·&nbsp; Refunds: <b style="color:#ee2200">${agg.csv_refunds}</b></div></div>`;
+}
+function handleAffCsvDrop(e){e.preventDefault();document.getElementById('aff-csv-drop').classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)processAffCsv(f);}
+function handleAffCsvFile(i){if(i.files[0])processAffCsv(i.files[0]);}
+function processAffCsv(file){
+  const r=new FileReader();r.onload=e=>{
+    const p=parseCsv(e.target.result);
+    if(!p||!p.rows.length){document.getElementById('aff-csv-preview').innerHTML='<div style="color:#ee2200;font-size:.65rem">Could not parse CSV — check file has headers.</div>';return;}
+    MAAffCsvData=aggCsvRows(p.rows,guessCsvMap(p.headers));
+    showCsvPreview(MAAffCsvData,p.rows.length,'aff-csv-preview');
+  };r.readAsText(file);
+}
+function openCsvImport(cardId){csvTargetCardId=cardId;csvParsed=null;document.getElementById('csv-preview-main').innerHTML='';document.getElementById('btn-csv-apply').disabled=true;document.getElementById('modal-csv').classList.add('open');}
+function handleCsvDrop(e){e.preventDefault();document.getElementById('csv-drop-main').classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)processCsvMain(f);}
+function handleCsvFileMain(i){if(i.files[0])processCsvMain(i.files[0]);}
+function processCsvMain(file){
+  const r=new FileReader();r.onload=e=>{
+    const p=parseCsv(e.target.result);
+    if(!p||!p.rows.length){document.getElementById('csv-preview-main').innerHTML='<div style="color:#ee2200;font-size:.65rem">Could not parse CSV.</div>';return;}
+    csvParsed=aggCsvRows(p.rows,guessCsvMap(p.headers));
+    showCsvPreview(csvParsed,p.rows.length,'csv-preview-main');
+    document.getElementById('btn-csv-apply').disabled=false;
+  };r.readAsText(file);
+}
+function applyMainCsv(){
+  if(!csvParsed||!csvTargetCardId)return;
+  const card=document.querySelector(`.aff-card[data-id="${csvTargetCardId}"]`);
+  if(!card)return;
+  try{localStorage.setItem('aff_csv::'+csvTargetCardId,JSON.stringify(csvParsed));}catch{}
+  card.dataset.csv=JSON.stringify(csvParsed);
+  closeModal('modal-csv');renderAffStats(card);saveState();
+}
+
+/* ── AFFILIATE CARD CREATION & RENDER ── */
+function genIpnToken(){
+  try{return Array.from(crypto.getRandomValues(new Uint8Array(20))).map(b=>b.toString(16).padStart(2,'0')).join('');}
+  catch{return uid()+uid();}
+}
+function getPostbackUrl(tok){return location.origin+'/api/ipn/'+tok;}
+
+function createAffCard(name,platform,raw,csvData,col,id,ipnToken,dateRange,fromRestore){
+  const list=document.getElementById('list-aff-'+col);
+  const emp=list.querySelector('.empty-state');if(emp)emp.remove();
+  const card=document.createElement('div');
+  card.className='aff-card';card.draggable=true;
+  const cid=id||uid();
+  card.dataset.id=cid;card.dataset.name=name;
+  card.dataset.platform=platform||'Other';
+  card.dataset.ipntoken=ipnToken||genIpnToken();
+  card.dataset.daterange=dateRange||'thismonth';
+  card.dataset.raw=JSON.stringify(raw||null);
+  card.dataset.csv=JSON.stringify(csvData||null);
+
+  const PCLR={JVzoo:'#0077cc',Explodely:'#ff5500',Clickbank:'#00aa44',Digistore:'#cc7700',Other:'#888'};
+  const pc=PCLR[platform]||'#888';
+  const platBadge=(platform&&platform!=='Other')?`<span class="aff-badge" style="color:${pc};border:1px solid ${pc}44;background:${pc}11;font-size:.52rem;letter-spacing:.07em;padding:2px 6px;border-radius:3px">${escHtml(platform)}</span>`:'';
+  const DR_OPTS=['today','yesterday','last7','thismonth','lastmonth','alltime'];
+  const DR_LBL={today:'Today',yesterday:'Yesterday',last7:'Last 7D',thismonth:'This Month',lastmonth:'Last Month',alltime:'All Time'};
+  const drSel=DR_OPTS.map(v=>`<option value="${v}"${(dateRange||'thismonth')===v?' selected':''}>${DR_LBL[v]}</option>`).join('');
+  const pbUrl=getPostbackUrl(card.dataset.ipntoken);
+
+  card.innerHTML=`
+    <div class="aff-header" onclick="toggleCard(this,'aff-body')">
+      <span class="drag-handle" onclick="event.stopPropagation()">⠿</span>
+      <span class="aff-name">🤝 ${escHtml(name)}</span>
+      ${platBadge}
+      <span class="aff-comm">${raw?fmt(raw.commission_net??raw.total_revenue??0):'$—'}</span>
+      <span class="aff-live">● LIVE</span>
+      <span class="aff-toggle">▲</span>
+      <button class="aff-remove" onclick="removeAffCard(event,this)">✕</button>
+    </div>
+    <div class="aff-body collapsed">
+      <div id="aff-ipn-notify-${cid}" class="ipn-notify"></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px">
+        <select class="form-select" style="font-size:.6rem;padding:3px 6px;width:auto;flex-shrink:0"
+                onchange="changeAffDateRange('${cid}',this.value)">${drSel}</select>
+        <button class="refresh-btn" style="margin-top:0" onclick="refreshAffCard('${cid}')">🔄 Refresh</button>
+        <button class="refresh-btn" style="margin-top:0" onclick="openCsvImport('${cid}')">📂 Import CSV</button>
+      </div>
+      <div class="aff-stats-wrap"></div>
+      <div class="ipn-url-wrap">
+        <div class="ipn-url-label">Postback / IPN URL — paste into your platform settings</div>
+        <div class="ipn-url-box">${escHtml(pbUrl)}</div>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('${pbUrl.replace(/'/g,"\\'")}').then(()=>{this.textContent='✓ Copied!';setTimeout(()=>this.textContent='📋 Copy URL',1600)})">📋 Copy URL</button>
+        <div style="font-size:.48rem;color:rgba(120,160,255,.3);margin-top:4px;line-height:1.5">JVZoo: Account → IPN URL &nbsp;·&nbsp; Explodely: Affiliate Settings → Postback URL &nbsp;·&nbsp; Requires Cloudflare KV — see setup note below.</div>
+      </div>
+    </div>`;
+
+  list.appendChild(card);
+  renderAffStats(card);
+  if(!fromRestore){updateStats();saveState();}
+}
+
+function renderAffStats(card){
+  const raw=JSON.parse(card.dataset.raw||'null');
+  const csv=JSON.parse(card.dataset.csv||'null');
+  const wrap=card.querySelector('.aff-stats-wrap');
+  if(!wrap)return;
+  let html='';
+
+  if(raw){
+    const rf=raw.refund_rate||0;
+    const rfCls=rf>10?'red':rf>5?'orange':'green';
+    html+=`<div class="aff-section-label">API Data · ${raw.date_range||'this month'}</div>
+    <div class="data-grid">
+      <div class="df-item"><span class="df-label">Commission Earned</span><span class="df-value green">${fmt(raw.commission_gross||0)}</span></div>
+      <div class="df-item"><span class="df-label">Net Commission</span><span class="df-value green">${fmt(raw.commission_net??raw.total_revenue??0)}</span></div>
+      <div class="df-item"><span class="df-label">Sales</span><span class="df-value">${(raw.total_orders||0).toLocaleString()}</span></div>
+      <div class="df-item"><span class="df-label">Refunds</span><span class="df-value ${raw.total_refunds?'red':''}">${raw.total_refunds||0}</span></div>
+      <div class="df-item"><span class="df-label">Refund Rate</span><span class="df-value ${rfCls}">${rf.toFixed(1)}%</span></div>
+      <div class="df-item"><span class="df-label">Last Sale</span><span class="df-value" style="font-size:.6rem">${raw.last_sale_date||'—'}</span></div>
+    </div>`;
+    if(raw.aff_products?.length){
+      html+=`<div class="ex-block"><div class="ex-title">Products Promoted (${raw.aff_products.length})</div>
+      <div class="funnel-wrap"><table class="funnel-tbl"><thead><tr><th>Product</th><th>Sales</th><th>Commission</th><th>RF#</th></tr></thead><tbody>
+      ${raw.aff_products.map(p=>`<tr><td title="${escHtml(p.name)}">${escHtml((p.name||'—').slice(0,30))}</td><td>${p.sales}</td><td class="green">${fmt(p.commission)}</td><td class="${p.refunds?'red':''}">${p.refunds||0}</td></tr>`).join('')}
+      </tbody></table></div></div>`;
+    }
+    if(raw.recent_transactions?.length){
+      html+=`<div class="ex-block"><div class="ex-title">Recent</div>
+      ${raw.recent_transactions.map(t=>`<div class="ex-row txn-row"><span class="ex-sub" style="white-space:nowrap;font-size:.56rem">${escHtml(t.date||'')}</span><span class="txn-type ${t.type}">${t.type}</span><span class="ex-name">${escHtml(t.product||'—')}</span><span class="ex-val ${t.type==='sale'?'green':'red'}">${fmt(t.amount)}</span></div>`).join('')}
+      </div>`;
+    }
+  } else {
+    html+=`<div class="api-err-box"><div class="api-err-ico">🤝</div><div class="api-err-msg">No API data — enter credentials when adding or click Refresh.</div><button class="api-retry-btn" onclick="refreshAffCard('${card.dataset.id}')">↻ Refresh</button></div>`;
+  }
+
+  if(csv){
+    const rf2=csv.csv_refund_rate||0;
+    html+=`<div class="csv-section"><div class="aff-section-label">Historical Data <span class="csv-tag">CSV</span> <span style="font-size:.44rem;color:rgba(100,150,255,.35)">${csv.imported_at?new Date(csv.imported_at).toLocaleDateString():''}</span></div>
+    <div class="data-grid">
+      <div class="df-item"><span class="df-label">CSV Commission</span><span class="df-value green">${fmt(csv.csv_commission||0)}</span></div>
+      <div class="df-item"><span class="df-label">CSV Net</span><span class="df-value green">${fmt(csv.csv_net||0)}</span></div>
+      <div class="df-item"><span class="df-label">CSV Sales</span><span class="df-value">${(csv.csv_sales||0).toLocaleString()}</span></div>
+      <div class="df-item"><span class="df-label">CSV Refunds</span><span class="df-value ${csv.csv_refunds?'red':''}">${csv.csv_refunds||0}</span></div>
+      <div class="df-item full"><span class="df-label">Refund Rate</span><span class="df-value ${rf2>10?'red':rf2>5?'orange':'green'}">${rf2.toFixed(1)}%</span></div>
+    </div>
+    ${csv.csv_products?.length?`<div class="ex-block" style="margin-top:6px"><div class="ex-title">CSV Products</div><div class="funnel-wrap"><table class="funnel-tbl"><thead><tr><th>Product</th><th>Sales</th><th>Commission</th><th>RF#</th></tr></thead><tbody>${csv.csv_products.map(p=>`<tr><td title="${escHtml(p.name)}">${escHtml((p.name||'—').slice(0,30))}</td><td>${p.sales}</td><td class="green">${fmt(p.commission)}</td><td class="${p.refunds?'red':''}">${p.refunds||0}</td></tr>`).join('')}</tbody></table></div></div>`:''}
+    </div>`;
+  }
+
+  if(raw&&csv){
+    const total=(raw.commission_net??raw.total_revenue??0)+(csv.csv_net||0);
+    html+=`<div style="border-top:1px solid rgba(0,100,200,.15);padding-top:6px;margin-top:4px;display:flex;align-items:center;gap:8px"><span style="font-size:.5rem;letter-spacing:.1em;text-transform:uppercase;color:rgba(100,150,255,.45)">Combined Total</span><span style="color:#22aaff;font-weight:700;font-size:.82rem">${fmt(total)}</span></div>`;
+  }
+
+  wrap.innerHTML=html;
+
+  // Update header commission number
+  const commVal=raw?(raw.commission_net??raw.total_revenue??0):(csv?(csv.csv_net||0):0);
+  const commEl=card.querySelector('.aff-comm');if(commEl)commEl.textContent=fmt(commVal);
+}
+
+function removeAffCard(e,btn){
+  e.stopPropagation();
+  const card=btn.closest('.aff-card');const list=card.parentElement;
+  card.style.cssText+='opacity:0;transform:scale(.95);transition:all .22s';
+  setTimeout(()=>{card.remove();if(!list.querySelector('.aff-card'))list.innerHTML='<div class="empty-state">No affiliate accounts. Click + to connect one.</div>';updateStats();saveState();},240);
+}
+
+async function refreshAffCard(cardId){
+  const card=document.querySelector(`.aff-card[data-id="${cardId}"]`);if(!card)return;
+  const platform=card.dataset.platform;const dateRange=card.dataset.daterange||'thismonth';
+  const wrap=card.querySelector('.aff-stats-wrap');
+  if(wrap)wrap.innerHTML='<div style="color:var(--silver);font-size:.6rem;padding:8px 0">Fetching…</div>';
+  let creds=null;
+  try{creds=JSON.parse(localStorage.getItem('aff_cred::'+platform)||'null');}catch{}
+  if(!creds||platform==='Other'){if(wrap)wrap.innerHTML='<div style="color:#ee8800;font-size:.6rem;padding:4px 0">No API credentials — re-add via + Add Affiliate, or import CSV.</div>';return;}
+  try{
+    const raw=await fetchAffApiData(platform,creds,dateRange);
+    card.dataset.raw=JSON.stringify(raw||null);
+    renderAffStats(card);saveState();
+  }catch(e){if(wrap)wrap.innerHTML=`<div style="color:#ee2200;font-size:.6rem;padding:4px 0">❌ ${escHtml(e.message)}</div>`;}
+}
+
+async function changeAffDateRange(cardId,dateRange){
+  const card=document.querySelector(`.aff-card[data-id="${cardId}"]`);if(!card)return;
+  card.dataset.daterange=dateRange;saveState();
+  await refreshAffCard(cardId);
+}
+
+/* ── IPN POLLING (checks postback endpoint every 5 min) ── */
+async function pollIpnData(){
+  document.querySelectorAll('.aff-card').forEach(async card=>{
+    const tok=card.dataset.ipntoken;if(!tok)return;
+    try{
+      const r=await fetch('/api/ipn/'+tok,{signal:AbortSignal.timeout(5000)});
+      if(!r.ok)return;
+      const d=await r.json();
+      if(!d.success||d.kv_missing||!d.notifications?.length)return;
+      const lastCheck=parseInt(card.dataset.last_ipn_check||'0');
+      const newN=d.notifications.filter(n=>n.received_at>lastCheck);
+      if(!newN.length)return;
+      card.dataset.last_ipn_check=Date.now();
+      const sales=newN.filter(n=>n.type==='sale').length;
+      const notify=document.getElementById('aff-ipn-notify-'+card.dataset.id);
+      if(notify&&sales>0){notify.textContent=`🔔 ${sales} new sale${sales>1?'s':''} received via postback — click Refresh to update`;notify.style.display='block';}
+    }catch{}
+  });
+}
+
+/* ══════════════════════════════════════════
    DRAG-TO-REORDER
 ══════════════════════════════════════════ */
 function dragAfterElement(list,y){
@@ -2134,7 +2672,7 @@ function setupDragReorder(){
 /* ══════════════════════════════════════════
    BOOT
 ══════════════════════════════════════════ */
-window.addEventListener('DOMContentLoaded',()=>{restoreAll();setupDragReorder();});
+window.addEventListener('DOMContentLoaded',()=>{restoreAll();setupDragReorder();setInterval(pollIpnData,5*60*1000);});
 </script>
 </body>
 </html>
