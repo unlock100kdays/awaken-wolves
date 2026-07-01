@@ -912,7 +912,7 @@ function saveState(){
       state[col].under.push({id:c.dataset.id,name:c.dataset.name,pm:c.dataset.pm,vsl:c.dataset.vsl,script:c.dataset.script,deadline:c.dataset.deadline,checklist:cl});
     });
     document.querySelectorAll(`#list-aff-${col} .aff-card`).forEach(c=>{
-      state[col].aff.push({id:c.dataset.id,name:c.dataset.name,platform:c.dataset.platform,ipntoken:c.dataset.ipntoken,dateRange:c.dataset.daterange||'thismonth',raw:JSON.parse(c.dataset.raw||'null'),csv:JSON.parse(c.dataset.csv||'null')});
+      state[col].aff.push({id:c.dataset.id,name:c.dataset.name,platform:c.dataset.platform,ipntoken:c.dataset.ipntoken,dateRange:c.dataset.daterange||'thismonth',raw:JSON.parse(c.dataset.raw||'null'),csv:JSON.parse(c.dataset.csv||'null'),ipn:JSON.parse(c.dataset.ipn||'null')});
     });
   });
   localStorage.setItem(S_KEY,JSON.stringify(state));
@@ -940,7 +940,7 @@ function restoreAll(){
       }
       if(state[col]?.aff?.length){
         document.getElementById(`list-aff-${col}`).innerHTML='';
-        state[col].aff.forEach(a=>createAffCard(a.name,a.platform,a.raw,a.csv,col,a.id,a.ipntoken,a.dateRange,true));
+        state[col].aff.forEach(a=>createAffCard(a.name,a.platform,a.raw,a.csv,col,a.id,a.ipntoken,a.dateRange,true,a.ipn));
       }
     });
   }
@@ -2561,7 +2561,7 @@ function genIpnToken(){
 }
 function getPostbackUrl(tok){return location.origin+'/api/ipn/'+tok;}
 
-function createAffCard(name,platform,raw,csvData,col,id,ipnToken,dateRange,fromRestore){
+function createAffCard(name,platform,raw,csvData,col,id,ipnToken,dateRange,fromRestore,ipnData){
   const list=document.getElementById('list-aff-'+col);
   const emp=list.querySelector('.empty-state');if(emp)emp.remove();
   const card=document.createElement('div');
@@ -2573,6 +2573,7 @@ function createAffCard(name,platform,raw,csvData,col,id,ipnToken,dateRange,fromR
   card.dataset.daterange=dateRange||'thismonth';
   card.dataset.raw=JSON.stringify(raw||null);
   card.dataset.csv=JSON.stringify(csvData||null);
+  card.dataset.ipn=JSON.stringify(ipnData||null);
 
   const PCLR={JVzoo:'#0077cc',Explodely:'#ff5500',Clickbank:'#00aa44',Digistore:'#cc7700',Other:'#888'};
   const pc=PCLR[platform]||'#888';
@@ -2617,6 +2618,7 @@ function createAffCard(name,platform,raw,csvData,col,id,ipnToken,dateRange,fromR
 function renderAffStats(card){
   const raw=JSON.parse(card.dataset.raw||'null');
   const csv=JSON.parse(card.dataset.csv||'null');
+  const ipn=JSON.parse(card.dataset.ipn||'null');
   const wrap=card.querySelector('.aff-stats-wrap');
   if(!wrap)return;
   const platform=card.dataset.platform||'';
@@ -2734,8 +2736,32 @@ function renderAffStats(card){
     html+=`</div>`;
   }
 
-  if(raw&&csv){
-    const total=(raw.commission_net??raw.total_revenue??0)+(csv.csv_net||0);
+  /* ── Live Postbacks (IPN/ISN) section ── */
+  if(ipn&&ipn.ipn_sales>0){
+    html+=`<div class="csv-section" style="margin-top:6px;border-top:1px solid rgba(255,150,0,.12);padding-top:8px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="aff-section-label" style="margin:0">Live Postbacks</span>
+        <span class="aff-live" style="font-size:.44rem;animation:pulse 1.4s infinite">● LIVE</span>
+      </div>
+      <span style="font-size:.62rem;color:#22aaff;font-weight:700">${fmt(ipn.ipn_net||0)} net</span>
+    </div>
+    <div class="data-grid">
+      <div class="df-item"><span class="df-label">Sales</span><span class="df-value">${ipn.ipn_sales}</span></div>
+      <div class="df-item"><span class="df-label">Refunds</span><span class="df-value ${ipn.ipn_refunds?'red':''}">${ipn.ipn_refunds||0}</span></div>
+      <div class="df-item"><span class="df-label">Gross</span><span class="df-value green">${fmt(ipn.ipn_gross||0)}</span></div>
+      <div class="df-item"><span class="df-label">Net</span><span class="df-value" style="color:#22aaff">${fmt(ipn.ipn_net||0)}</span></div>
+    </div>
+    ${ipn.ipn_recent?.length?`<div class="ex-block" style="margin-top:6px"><div class="ex-title">Recent Postbacks</div>
+    ${ipn.ipn_recent.map(t=>`<div class="ex-row txn-row"><span class="ex-sub" style="white-space:nowrap;font-size:.55rem">${escHtml(t.date)}</span><span class="txn-type ${t.type}">${t.type}</span><span class="ex-name">${escHtml(t.product||'—')}</span><span class="ex-val ${t.type==='sale'?'green':'red'}">${fmt(t.amount)}</span></div>`).join('')}
+    </div>`:''}
+    </div>`;
+  }
+
+  /* Combined total if more than one data source present */
+  const srcCount=[raw,csv,ipn&&ipn.ipn_sales>0?ipn:null].filter(Boolean).length;
+  if(srcCount>1){
+    const total=(raw?(raw.commission_net??raw.total_revenue??0):0)+(csv?(csv.csv_net||0):0)+(ipn?(ipn.ipn_net||0):0);
     html+=`<div style="border-top:1px solid rgba(0,100,200,.15);padding-top:8px;margin-top:6px;display:flex;align-items:center;gap:10px">
       <span style="font-size:.5rem;letter-spacing:.1em;text-transform:uppercase;color:rgba(100,150,255,.4)">Combined Total</span>
       <span style="color:#22aaff;font-weight:700;font-size:.9rem">${fmt(total)}</span>
@@ -2744,8 +2770,9 @@ function renderAffStats(card){
 
   wrap.innerHTML=html;
 
-  // Update header commission number
-  const commVal=raw?(raw.commission_net??raw.total_revenue??0):(csv?(csv.csv_net||0):0);
+  // Update header commission — sum all available sources
+  const ipnNet=ipn?(ipn.ipn_net||0):0;
+  const commVal=((raw?(raw.commission_net??raw.total_revenue??0):0)+(csv?(csv.csv_net||0):0)+ipnNet)||0;
   const commEl=card.querySelector('.aff-comm');if(commEl)commEl.textContent=fmt(commVal);
 }
 
@@ -2782,17 +2809,39 @@ async function pollIpnData(){
   document.querySelectorAll('.aff-card').forEach(async card=>{
     const tok=card.dataset.ipntoken;if(!tok)return;
     try{
-      const r=await fetch('/api/ipn/'+tok,{signal:AbortSignal.timeout(5000)});
+      const r=await fetch('/api/ipn/'+tok,{signal:AbortSignal.timeout(8000)});
       if(!r.ok)return;
       const d=await r.json();
       if(!d.success||d.kv_missing||!d.notifications?.length)return;
+      const all=d.notifications;
+      // Aggregate ALL stored notifications into live stats
+      const saleTxns=all.filter(n=>n.type==='sale');
+      const refTxns=all.filter(n=>n.type==='refund');
+      const aggIpn={
+        ipn_sales:saleTxns.length,
+        ipn_refunds:refTxns.length,
+        ipn_gross:saleTxns.reduce((s,n)=>s+(n.amount||0),0),
+        ipn_refund_amt:refTxns.reduce((s,n)=>s+(n.amount||0),0),
+        ipn_net:saleTxns.reduce((s,n)=>s+(n.amount||0),0)-refTxns.reduce((s,n)=>s+(n.amount||0),0),
+        ipn_recent:all.slice(0,20).map(n=>({
+          date:new Date(n.received_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short'})+' '+new Date(n.received_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),
+          type:n.type,amount:n.amount||0,product:n.product||'—'
+        })),
+        updated_at:Date.now()
+      };
+      card.dataset.ipn=JSON.stringify(aggIpn);
+      // Detect new since last poll
       const lastCheck=parseInt(card.dataset.last_ipn_check||'0');
-      const newN=d.notifications.filter(n=>n.received_at>lastCheck);
-      if(!newN.length)return;
+      const newN=all.filter(n=>n.received_at>lastCheck);
       card.dataset.last_ipn_check=Date.now();
-      const sales=newN.filter(n=>n.type==='sale').length;
-      const notify=document.getElementById('aff-ipn-notify-'+card.dataset.id);
-      if(notify&&sales>0){notify.textContent=`🔔 ${sales} new sale${sales>1?'s':''} received via postback — click Refresh to update`;notify.style.display='block';}
+      // Auto-render with updated IPN data — no button click needed
+      renderAffStats(card);saveState();
+      // Brief flash for truly new sales
+      const newSales=newN.filter(n=>n.type==='sale').length;
+      if(newSales>0){
+        const notify=document.getElementById('aff-ipn-notify-'+card.dataset.id);
+        if(notify){notify.textContent=`🔔 ${newSales} new sale${newSales>1?'s':''} received via postback`;notify.style.display='block';setTimeout(()=>notify.style.display='none',8000);}
+      }
     }catch{}
   });
 }
