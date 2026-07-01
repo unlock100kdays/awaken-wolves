@@ -229,6 +229,24 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 .copy-btn{font-size:.52rem;padding:2px 8px;background:rgba(0,80,180,.1);border:1px solid rgba(0,120,255,.18);border-radius:3px;color:#22aaff;cursor:pointer;transition:all .2s;font-family:inherit;letter-spacing:.05em;margin-top:4px}
 .copy-btn:hover{background:rgba(0,120,255,.18)}
 .ipn-notify{font-size:.58rem;color:#22aaff;background:rgba(0,80,200,.08);border:1px solid rgba(0,100,255,.18);border-radius:4px;padding:5px 8px;margin-bottom:4px;display:none}
+/* CSV HERO STATS */
+.csv-hero{display:flex;align-items:center;gap:6px;background:rgba(0,60,140,.06);border:1px solid rgba(0,80,180,.12);border-radius:5px;padding:10px 12px;margin-bottom:4px}
+.csv-hero-stat{flex:1;text-align:center}
+.csv-hs-val{font-size:.9rem;font-weight:700;letter-spacing:-.01em}
+.csv-hs-lbl{font-size:.47rem;letter-spacing:.1em;text-transform:uppercase;color:rgba(160,180,220,.4);margin-top:2px}
+.csv-hero-div{flex-shrink:0;color:rgba(100,130,180,.3);font-size:.75rem;font-weight:700}
+/* CSV PRODUCT BREAKDOWN */
+.csv-prod-list{display:flex;flex-direction:column;gap:6px}
+.csv-prod-row{display:flex;align-items:flex-start;gap:6px}
+.csv-prod-rank{flex-shrink:0;width:16px;font-size:.52rem;color:rgba(100,150,255,.4);font-weight:700;padding-top:1px;text-align:right}
+.csv-prod-info{flex:1;min-width:0}
+.csv-prod-name{font-size:.6rem;color:#d0d8f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px}
+.csv-prod-bar-wrap{height:3px;background:rgba(0,80,180,.12);border-radius:2px;overflow:hidden}
+.csv-prod-bar{height:100%;background:linear-gradient(90deg,#0066cc,#22aaff);border-radius:2px;transition:width .4s ease}
+.csv-prod-nums{flex-shrink:0;text-align:right;display:flex;flex-direction:column;gap:1px}
+.csv-pn-sales{font-size:.5rem;color:rgba(160,180,220,.4);letter-spacing:.04em}
+.csv-pn-rev{font-size:.62rem;font-weight:700}
+.csv-pn-ref{font-size:.5rem;letter-spacing:.03em}
 .aff-card.dragging{opacity:.35}
 
 /* DRAG REORDER */
@@ -2392,37 +2410,73 @@ let csvParsed=null,csvTargetCardId=null;
 
 function parseCsv(text){
   const lines=text.trim().split(/\r?\n/);if(lines.length<2)return null;
-  const delim=lines[0].includes('\t')?'\t':',';
+  /* Detect delimiter — prefer tab over comma (SheetJS uses commas; plain exports often tab) */
+  const delim=lines[0].split('\t').length>lines[0].split(',').length?'\t':',';
   const split=l=>{const res=[];let cur='',inQ=false;for(const c of l){if(c==='"'){inQ=!inQ;}else if(c===delim&&!inQ){res.push(cur.trim());cur='';}else cur+=c;}res.push(cur.trim());return res;};
-  const headers=split(lines[0]).map(h=>h.replace(/^"|"$/g,'').toLowerCase().trim());
-  const rows=lines.slice(1).map(l=>split(l)).filter(r=>r.join('').trim()&&r.length>=2);
-  return{headers,rows};
+  /* Skip title/banner rows — scan first 6 rows for the real header row.
+     Header row = first row with ≥3 cells containing recognisable column-name keywords.
+     Explodely exports have "Affiliate Transactions | Explodely" in row 0. */
+  const HDR=['type','date','time','order','product','price','amount','revenue','commission',
+             'sale','refund','name','id','total','earning','customer','status','country','tracking'];
+  let headerIdx=0;
+  for(let i=0;i<Math.min(6,lines.length-1);i++){
+    const cols=split(lines[i]).map(c=>c.replace(/^"|"$/g,'').toLowerCase());
+    if(cols.filter(c=>HDR.some(k=>c.includes(k))).length>=2){headerIdx=i;break;}
+  }
+  const headers=split(lines[headerIdx]).map(h=>h.replace(/^"|"$/g,'').toLowerCase().trim());
+  const rows=lines.slice(headerIdx+1).map(l=>split(l)).filter(r=>r.join('').trim()&&r.length>=2);
+  return{headers,rows,headerIdx};
 }
 function guessCsvMap(headers){
   const f=(...ks)=>headers.findIndex(h=>ks.some(k=>h.includes(k)));
   return{
-    date:f('date','time','sold','created'),
-    amount:f('commission','affiliate earn','affiliate amount','your earn','net earn','amount','revenue','price','gross','sale','total'),
-    type:f('type','status','purchase type'),
-    product:f('product','title','item','funnel','offer'),
+    date: f('order date','date','time','sold','created'),
+    amount: f('price','commission','affiliate earn','affiliate amount','your earn','net earn','amount','revenue','gross','sale','total'),
+    type: f('type','status','purchase type'),
+    product: f('product name','product','title','item','funnel','offer'),
   };
 }
 function aggCsvRows(rows,map){
-  let comm=0,refC=0,cnt=0,refs=0,cbs=0;const pm={};const recent=[];
+  let grossComm=0,refundAmt=0,cnt=0,refs=0,cbs=0;
+  const pm={};const recent=[];
   for(const row of rows){
     const ra=map.amount>=0?(row[map.amount]||'0'):'0';
-    const amt=parseFloat(ra.replace(/[$,€£\s]/g,''))||0;
-    const rt=map.type>=0?(row[map.type]||'sale').toLowerCase():'sale';
-    const isRef=rt.includes('refund');const isCB=rt.includes('charge')||rt.includes('dispute');const isSale=!isRef&&!isCB;
-    const pn=map.product>=0?(row[map.product]||'—'):'—';
-    const ds=map.date>=0?(row[map.date]||''):'';
-    let ts=0;if(ds){const d=new Date(ds);if(!isNaN(d))ts=Math.floor(d.getTime()/1000);}
-    if(!pm[pn])pm[pn]={name:pn,commission:0,sales:0,refunds:0};const p=pm[pn];
-    if(isSale){comm+=amt;cnt++;p.commission+=amt;p.sales++;}
-    else if(isRef){refC+=amt;refs++;p.refunds++;}else if(isCB){cbs++;}
-    if(recent.length<20)recent.push({date:ts?new Date(ts*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}):ds.slice(0,10)||'-',type:isRef?'refund':isCB?'chargeback':'sale',amount:amt,product:pn});
+    /* Handle "33.04 $", "$ 33.04", "-66.25 $", "1,234.56" etc. */
+    const amt=parseFloat(ra.replace(/[^0-9.\-]/g,''))||0;
+    const rt=map.type>=0?(row[map.type]||'').toLowerCase().trim():'';
+    /* Classify by explicit type column first; fall back to sign of amount */
+    const isRef=rt==='refund'||rt.includes('refund')||(rt===''&&amt<0);
+    const isCB=rt.includes('chargeback')||rt.includes('charge')||rt.includes('dispute');
+    const isSale=!isRef&&!isCB;
+    const absAmt=Math.abs(amt);  /* always positive; sign already captured by type */
+    const pn=map.product>=0?(row[map.product]||'—').trim():'—';
+    const ds=map.date>=0?(row[map.date]||'').trim():'';
+    let ts=0;
+    if(ds){
+      /* Try ISO first; then DD-MM-YYYY (Explodely format) */
+      let d=new Date(ds);
+      if(isNaN(d)&&/^\d{2}-\d{2}-\d{4}/.test(ds)){
+        const [dd,mm,yyyy]=ds.split(/[-\/]/);d=new Date(`${yyyy}-${mm}-${dd}`);}
+      if(!isNaN(d))ts=Math.floor(d.getTime()/1000);
+    }
+    if(!pm[pn])pm[pn]={name:pn,commission:0,sales:0,refunds:0,refundAmt:0};
+    const p=pm[pn];
+    if(isSale){grossComm+=absAmt;cnt++;p.commission+=absAmt;p.sales++;}
+    else if(isRef){refundAmt+=absAmt;refs++;p.refunds++;p.refundAmt+=absAmt;p.commission-=absAmt;}
+    else if(isCB){refundAmt+=absAmt;cbs++;}
+    if(recent.length<30){
+      recent.push({date:ts?new Date(ts*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}):ds||'-',type:isRef?'refund':isCB?'chargeback':'sale',amount:absAmt,product:pn});
+    }
   }
-  return{csv_sales:cnt,csv_commission:comm,csv_refunds:refs,csv_chargebacks:cbs,csv_refund_comm:refC,csv_net:comm-refC,csv_refund_rate:cnt>0?(refs/cnt*100):0,csv_products:Object.values(pm).sort((a,b)=>b.commission-a.commission).slice(0,15),csv_recent:recent,imported_at:Date.now()};
+  const netComm=grossComm-refundAmt;
+  return{
+    csv_sales:cnt,csv_commission:grossComm,csv_refunds:refs,csv_chargebacks:cbs,
+    csv_refund_amt:refundAmt,csv_net:netComm,
+    csv_refund_rate:cnt>0?(refs/cnt*100):0,
+    csv_refund_dollar_rate:grossComm>0?(refundAmt/grossComm*100):0,
+    csv_products:Object.values(pm).sort((a,b)=>b.commission-a.commission).slice(0,25),
+    csv_recent:recent,imported_at:Date.now(),
+  };
 }
 function showCsvPreview(agg,rows,elId){
   document.getElementById(elId).innerHTML=`<div style="background:rgba(0,80,180,.06);border:1px solid rgba(0,80,180,.2);border-radius:4px;padding:8px 10px"><div style="font-size:.58rem;color:#22aaff;font-weight:700;margin-bottom:4px">✓ ${rows} rows parsed</div><div style="font-size:.6rem;color:var(--silver)">Sales: <b style="color:#e0e0e0">${agg.csv_sales}</b> &nbsp;·&nbsp; Commission: <b style="color:#22aaff">${fmt(agg.csv_commission)}</b> &nbsp;·&nbsp; Refunds: <b style="color:#ee2200">${agg.csv_refunds}</b></div></div>`;
@@ -2576,22 +2630,91 @@ function renderAffStats(card){
   }
 
   if(csv){
-    const rf2=csv.csv_refund_rate||0;
-    html+=`<div class="csv-section"><div class="aff-section-label">Historical Data <span class="csv-tag">CSV</span> <span style="font-size:.44rem;color:rgba(100,150,255,.35)">${csv.imported_at?new Date(csv.imported_at).toLocaleDateString():''}</span></div>
-    <div class="data-grid">
-      <div class="df-item"><span class="df-label">CSV Commission</span><span class="df-value green">${fmt(csv.csv_commission||0)}</span></div>
-      <div class="df-item"><span class="df-label">CSV Net</span><span class="df-value green">${fmt(csv.csv_net||0)}</span></div>
-      <div class="df-item"><span class="df-label">CSV Sales</span><span class="df-value">${(csv.csv_sales||0).toLocaleString()}</span></div>
-      <div class="df-item"><span class="df-label">CSV Refunds</span><span class="df-value ${csv.csv_refunds?'red':''}">${csv.csv_refunds||0}</span></div>
-      <div class="df-item full"><span class="df-label">Refund Rate</span><span class="df-value ${rf2>10?'red':rf2>5?'orange':'green'}">${rf2.toFixed(1)}%</span></div>
+    const rf=csv.csv_refund_rate||0;
+    const rfDollar=csv.csv_refund_dollar_rate||0;
+    const rfCls=rf>10?'red':rf>5?'orange':'green';
+    const maxComm=csv.csv_products?.length?(csv.csv_products[0]?.commission||1):1;
+
+    /* Hero revenue bar */
+    html+=`<div class="csv-section">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="aff-section-label" style="margin:0">Imported Data</span>
+        <span class="csv-tag">CSV</span>
+        <span style="font-size:.44rem;color:rgba(100,150,255,.28)">${csv.imported_at?new Date(csv.imported_at).toLocaleDateString():''}</span>
+      </div>
+      <span style="font-size:.62rem;color:#22aaff;font-weight:700">${fmt(csv.csv_net||0)} net</span>
     </div>
-    ${csv.csv_products?.length?`<div class="ex-block" style="margin-top:6px"><div class="ex-title">CSV Products</div><div class="funnel-wrap"><table class="funnel-tbl"><thead><tr><th>Product</th><th>Sales</th><th>Commission</th><th>RF#</th></tr></thead><tbody>${csv.csv_products.map(p=>`<tr><td title="${escHtml(p.name)}">${escHtml((p.name||'—').slice(0,30))}</td><td>${p.sales}</td><td class="green">${fmt(p.commission)}</td><td class="${p.refunds?'red':''}">${p.refunds||0}</td></tr>`).join('')}</tbody></table></div></div>`:''}
+
+    <div class="csv-hero">
+      <div class="csv-hero-stat">
+        <div class="csv-hs-val green">${fmt(csv.csv_commission||0)}</div>
+        <div class="csv-hs-lbl">Gross Revenue</div>
+      </div>
+      <div class="csv-hero-div">→</div>
+      <div class="csv-hero-stat">
+        <div class="csv-hs-val red">-${fmt(csv.csv_refund_amt||0)}</div>
+        <div class="csv-hs-lbl">Refunded</div>
+      </div>
+      <div class="csv-hero-div">=</div>
+      <div class="csv-hero-stat">
+        <div class="csv-hs-val" style="color:#22aaff">${fmt(csv.csv_net||0)}</div>
+        <div class="csv-hs-lbl">Net Kept</div>
+      </div>
+    </div>
+
+    <div class="data-grid" style="margin-top:6px">
+      <div class="df-item"><span class="df-label">Total Sales</span><span class="df-value">${(csv.csv_sales||0).toLocaleString()}</span></div>
+      <div class="df-item"><span class="df-label">Refunds</span><span class="df-value ${csv.csv_refunds?'red':''}">${csv.csv_refunds||0} &nbsp;<span style="font-size:.6em;opacity:.7">(${rfCls==='red'?'🔴':rfCls==='orange'?'🟡':'🟢'} ${rf.toFixed(1)}%)</span></span></div>
+      <div class="df-item"><span class="df-label">Chargebacks</span><span class="df-value ${csv.csv_chargebacks?'red':''}">${csv.csv_chargebacks||0}</span></div>
+      <div class="df-item"><span class="df-label">Refund $ Rate</span><span class="df-value ${rfCls}">${rfDollar.toFixed(1)}%</span></div>
     </div>`;
+
+    /* Product breakdown with mini revenue bars */
+    if(csv.csv_products?.length){
+      html+=`<div class="ex-block" style="margin-top:10px">
+        <div class="ex-title" style="margin-bottom:6px">Products — sorted by revenue (${csv.csv_products.length})</div>
+        <div class="csv-prod-list">
+        ${csv.csv_products.map((p,i)=>{
+          const barW=Math.max(2,Math.round((p.commission/maxComm)*100));
+          const rfR=p.sales>0?(p.refunds/p.sales*100):0;
+          const rfCl=rfR>10?'red':rfR>5?'orange':'green';
+          return`<div class="csv-prod-row">
+            <div class="csv-prod-rank">${i+1}</div>
+            <div class="csv-prod-info">
+              <div class="csv-prod-name" title="${escHtml(p.name)}">${escHtml((p.name||'—').slice(0,38))}</div>
+              <div class="csv-prod-bar-wrap"><div class="csv-prod-bar" style="width:${barW}%"></div></div>
+            </div>
+            <div class="csv-prod-nums">
+              <span class="csv-pn-sales">${p.sales.toLocaleString()} sales</span>
+              <span class="csv-pn-rev green">${fmt(p.commission)}</span>
+              ${p.refunds?`<span class="csv-pn-ref red">RF: ${p.refunds} (${rfR.toFixed(0)}%)</span>`:''}
+            </div>
+          </div>`;
+        }).join('')}
+        </div>
+      </div>`;
+    }
+
+    /* Recent transactions */
+    if(csv.csv_recent?.length){
+      const salesOnly=csv.csv_recent.filter(t=>t.type==='sale').slice(0,10);
+      const refsOnly=csv.csv_recent.filter(t=>t.type!=='sale').slice(0,10);
+      if(refsOnly.length){
+        html+=`<div class="ex-block" style="margin-top:8px"><div class="ex-title">Recent Refunds / Chargebacks</div>
+        ${refsOnly.map(t=>`<div class="ex-row txn-row"><span class="ex-sub" style="font-size:.55rem">${t.date}</span><span class="txn-type refund">${t.type}</span><span class="ex-name">${escHtml((t.product||'—').slice(0,30))}</span><span class="ex-val red">-${fmt(t.amount)}</span></div>`).join('')}
+        </div>`;
+      }
+    }
+    html+=`</div>`;
   }
 
   if(raw&&csv){
     const total=(raw.commission_net??raw.total_revenue??0)+(csv.csv_net||0);
-    html+=`<div style="border-top:1px solid rgba(0,100,200,.15);padding-top:6px;margin-top:4px;display:flex;align-items:center;gap:8px"><span style="font-size:.5rem;letter-spacing:.1em;text-transform:uppercase;color:rgba(100,150,255,.45)">Combined Total</span><span style="color:#22aaff;font-weight:700;font-size:.82rem">${fmt(total)}</span></div>`;
+    html+=`<div style="border-top:1px solid rgba(0,100,200,.15);padding-top:8px;margin-top:6px;display:flex;align-items:center;gap:10px">
+      <span style="font-size:.5rem;letter-spacing:.1em;text-transform:uppercase;color:rgba(100,150,255,.4)">Combined Total</span>
+      <span style="color:#22aaff;font-weight:700;font-size:.9rem">${fmt(total)}</span>
+    </div>`;
   }
 
   wrap.innerHTML=html;
