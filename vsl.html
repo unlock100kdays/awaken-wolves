@@ -2287,7 +2287,7 @@ function chooseAffPlatform(el){
   el.classList.add('selected');
   if(MAPlat==='Other'||MAPlat==='Explodely'){showAffStep('aff-step-csv');return;}
   const hints={
-    JVzoo:'Your JVZoo Affiliate API key — Account → My Account → API Keys',
+    JVzoo:'Your JVZoo API key — same key works for vendor + affiliate. Account → My Account → API Keys',
     Explodely:'Your Explodely affiliate username + API key',
     Clickbank:'Dev API Key from ClickBank Account Settings → API Keys',
     Digistore:'API key from DigiStore24 Settings → API',
@@ -2374,10 +2374,17 @@ function aggregateJvzooAffiliate(txs,dateRange){
   const pm={};const recent=[];
   for(const tx of txs){
     const ae=parseFloat(tx.payouts?.affiliate_earnings??0)||0;
+    const se=parseFloat(tx.payouts?.seller_earnings??0)||0;
+    /* Skip vendor transactions — seller_earnings > 0 means this account is
+       the vendor; affiliate_earnings there is what was paid to someone else. */
+    if(se>0) continue;
+    /* Skip entirely if no affiliate earnings and it's a sale (avoids counting
+       direct-sale vendor transactions that slipped through with se=0). */
     const st=String(tx.status??'').toUpperCase();
     const isRef=st.includes('REFUND');
     const isCB=st.includes('CHARG')||st.includes('DISPUT')||st.includes('CGBK');
     const isSale=!isRef&&!isCB;
+    if(isSale&&ae===0) continue;
     const pid=String(tx.product_id??'_unk');
     const pn=tx.product_name??pid;
     let ts=0;if(tx.sale_date){const d=new Date(tx.sale_date);if(!isNaN(d))ts=Math.floor(d.getTime()/1000);}
