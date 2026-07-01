@@ -49,7 +49,35 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
 .search:focus{border-color:rgba(180,0,0,0.35)}
 .top-avatar{width:34px;height:34px;border-radius:4px;background:linear-gradient(135deg,#8b0000,#cc1100);display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;color:#fff;border:1px solid rgba(180,0,0,0.4);cursor:pointer}
 .notif{width:34px;height:34px;border-radius:4px;border:1px solid var(--border);background:rgba(255,255,255,0.02);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;color:var(--silver);font-size:1rem}
-.ndot{position:absolute;top:7px;right:7px;width:5px;height:5px;border-radius:50%;background:var(--red)}
+.ndot{position:absolute;top:5px;right:5px;min-width:15px;height:15px;border-radius:8px;background:var(--red);font-size:.48rem;font-weight:800;color:#fff;display:none;align-items:center;justify-content:center;padding:0 3px;line-height:1;pointer-events:none}
+.ndot.active{display:flex}
+/* Notification panel */
+.notif-panel{position:absolute;top:calc(100% + 10px);right:0;width:310px;background:rgba(6,1,1,.98);border:1px solid rgba(160,0,0,.3);border-radius:6px;box-shadow:0 10px 40px rgba(0,0,0,.9),0 0 0 1px rgba(0,0,0,.4);z-index:9999;overflow:hidden;display:none;animation:npFadeIn .15s ease}
+.notif-panel.open{display:block}
+@keyframes npFadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.notif-panel-hdr{display:flex;align-items:center;justify-content:space-between;padding:9px 12px 8px;border-bottom:1px solid rgba(180,0,0,.13)}
+.notif-panel-title{font-size:.55rem;letter-spacing:.15em;text-transform:uppercase;color:rgba(180,170,190,.5)}
+.notif-clear-btn{font-size:.52rem;color:rgba(180,0,0,.6);background:none;border:none;cursor:pointer;font-family:inherit;padding:0;transition:color .15s}
+.notif-clear-btn:hover{color:var(--red)}
+.notif-list{max-height:340px;overflow-y:auto}
+.notif-list::-webkit-scrollbar{width:3px}
+.notif-list::-webkit-scrollbar-thumb{background:rgba(180,0,0,.2)}
+.notif-empty{padding:22px;text-align:center;font-size:.58rem;color:rgba(120,120,150,.35);line-height:1.8}
+.notif-item{display:flex;align-items:flex-start;gap:9px;padding:9px 12px;border-bottom:1px solid rgba(255,255,255,.025);transition:background .15s;position:relative}
+.notif-item:hover{background:rgba(255,255,255,.018)}
+.notif-item.unread::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--red)}
+.notif-ico{font-size:.95rem;flex-shrink:0;margin-top:1px}
+.notif-info{flex:1;min-width:0}
+.notif-msg{font-size:.6rem;color:#d8d8e0;line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.notif-sub{font-size:.5rem;color:rgba(140,150,170,.4);margin-top:2px}
+.notif-amt{font-size:.68rem;font-weight:800;color:#22dd66;flex-shrink:0;align-self:center}
+.notif-item.refund .notif-amt{color:#ee3300}
+/* Avatar menu */
+.avatar-wrap{position:relative}
+.avatar-menu{position:absolute;top:calc(100% + 6px);right:0;background:rgba(6,1,1,.98);border:1px solid rgba(160,0,0,.28);border-radius:5px;box-shadow:0 8px 28px rgba(0,0,0,.8);z-index:9999;display:none;min-width:140px;animation:npFadeIn .15s ease}
+.avatar-menu.open{display:block}
+.avatar-menu-item{padding:10px 14px;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:rgba(200,180,180,.65);cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:8px}
+.avatar-menu-item:hover{background:rgba(180,0,0,.1);color:#fff}
 
 /* CONTENT */
 .vsl-content{flex:1;overflow-y:auto;padding:24px 28px 40px;position:relative}
@@ -514,8 +542,22 @@ html,body{width:100%;height:100%;font-family:'Segoe UI',system-ui,sans-serif;bac
     </div>
     <div class="topbar-right">
       <input class="search" type="text" placeholder="Search operations…"/>
-      <div class="notif">🔔<span class="ndot"></span></div>
-      <div class="top-avatar" id="top-avatar">P</div>
+      <div class="notif" onclick="toggleNotifPanel(event)" style="position:relative">🔔
+        <span class="ndot" id="notif-badge"></span>
+        <div class="notif-panel" id="notif-panel">
+          <div class="notif-panel-hdr">
+            <span class="notif-panel-title">Notifications</span>
+            <button class="notif-clear-btn" onclick="clearNotifs(event)">Clear all</button>
+          </div>
+          <div class="notif-list" id="notif-list"><div class="notif-empty">No new notifications.<br>New sales will appear here live.</div></div>
+        </div>
+      </div>
+      <div class="avatar-wrap">
+        <div class="top-avatar" id="top-avatar" onclick="toggleAvatarMenu(event)">P</div>
+        <div class="avatar-menu" id="avatar-menu">
+          <div class="avatar-menu-item" onclick="doLogout()">🚪 &nbsp;Logout</div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -2830,6 +2872,110 @@ async function changeAffDateRange(cardId,dateRange){
 }
 
 /* ── IPN POLLING (checks postback endpoint every 5 min) ── */
+/* ══════════════════════════════════════════
+   CHA-CHING SOUND
+══════════════════════════════════════════ */
+function playChaChing(){
+  try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    const t=ctx.currentTime;
+    // Register "cha" — low cash-drawer thud
+    const o1=ctx.createOscillator(),g1=ctx.createGain();
+    o1.connect(g1);g1.connect(ctx.destination);
+    o1.type='triangle';o1.frequency.setValueAtTime(220,t);o1.frequency.exponentialRampToValueAtTime(90,t+.1);
+    g1.gain.setValueAtTime(.45,t);g1.gain.exponentialRampToValueAtTime(.001,t+.16);
+    o1.start(t);o1.stop(t+.16);
+    // "Ching" — high coin ring
+    const o2=ctx.createOscillator(),g2=ctx.createGain();
+    o2.connect(g2);g2.connect(ctx.destination);
+    o2.type='sine';o2.frequency.setValueAtTime(3136,t+.1);o2.frequency.exponentialRampToValueAtTime(1760,t+.7);
+    g2.gain.setValueAtTime(.28,t+.1);g2.gain.exponentialRampToValueAtTime(.001,t+1);
+    o2.start(t+.1);o2.stop(t+1);
+    // Shimmer overtone
+    const o3=ctx.createOscillator(),g3=ctx.createGain();
+    o3.connect(g3);g3.connect(ctx.destination);
+    o3.type='sine';o3.frequency.setValueAtTime(4186,t+.12);o3.frequency.exponentialRampToValueAtTime(2093,t+.6);
+    g3.gain.setValueAtTime(.12,t+.12);g3.gain.exponentialRampToValueAtTime(.001,t+.75);
+    o3.start(t+.12);o3.stop(t+.75);
+  }catch{}
+}
+
+/* ══════════════════════════════════════════
+   NOTIFICATION SYSTEM
+══════════════════════════════════════════ */
+const NOTIF_KEY='wolf_notifs_v1';
+const MAX_NOTIFS=60;
+
+function loadNotifs(){try{return JSON.parse(localStorage.getItem(NOTIF_KEY))||[];}catch{return[];}}
+function saveNotifs(ns){localStorage.setItem(NOTIF_KEY,JSON.stringify(ns.slice(0,MAX_NOTIFS)));}
+
+function addNotification({type='sale',platform='',product='',amount=0,source='affiliate'}){
+  const ns=loadNotifs();
+  const n={id:uid(),type,platform,product,amount,source,time:Date.now(),read:false};
+  ns.unshift(n);
+  saveNotifs(ns);
+  renderNotifBadge(ns);
+  renderNotifList(ns);
+  if(type==='sale')playChaChing();
+}
+
+function renderNotifBadge(ns){
+  const unread=(ns||loadNotifs()).filter(n=>!n.read).length;
+  const badge=document.getElementById('notif-badge');
+  if(!badge)return;
+  if(unread>0){badge.textContent=unread>99?'99+':unread;badge.classList.add('active');}
+  else{badge.textContent='';badge.classList.remove('active');}
+}
+
+function renderNotifList(ns){
+  const list=document.getElementById('notif-list');if(!list)return;
+  ns=ns||loadNotifs();
+  if(!ns.length){list.innerHTML='<div class="notif-empty">No new notifications.<br>New sales will appear here live.</div>';return;}
+  const timeAgo=t=>{const s=Math.floor((Date.now()-t)/1000);if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return new Date(t).toLocaleDateString('en-GB',{day:'2-digit',month:'short'});};
+  const ico=t=>t==='refund'?'🔴':t==='chargeback'?'⚠️':'💵';
+  list.innerHTML=ns.map(n=>`<div class="notif-item ${n.read?'':'unread'} ${n.type}">
+    <span class="notif-ico">${ico(n.type)}</span>
+    <div class="notif-info">
+      <div class="notif-msg">${escHtml(n.platform?`[${n.platform}] `:'')}${escHtml(n.product||'New sale')}</div>
+      <div class="notif-sub">${n.source==='affiliate'?'Affiliate':'Vendor'} · ${timeAgo(n.time)}</div>
+    </div>
+    <span class="notif-amt">${n.type==='sale'?'+':'-'}${fmt(n.amount)}</span>
+  </div>`).join('');
+}
+
+function toggleNotifPanel(e){
+  e&&e.stopPropagation();
+  const panel=document.getElementById('notif-panel');
+  const isOpen=panel.classList.toggle('open');
+  document.getElementById('avatar-menu')?.classList.remove('open');
+  if(isOpen){
+    const ns=loadNotifs().map(n=>({...n,read:true}));
+    saveNotifs(ns);renderNotifBadge(ns);renderNotifList(ns);
+  }
+}
+
+function clearNotifs(e){
+  e&&e.stopPropagation();
+  saveNotifs([]);renderNotifBadge([]);renderNotifList([]);
+}
+
+function toggleAvatarMenu(e){
+  e&&e.stopPropagation();
+  document.getElementById('notif-panel')?.classList.remove('open');
+  document.getElementById('avatar-menu')?.classList.toggle('open');
+}
+
+function doLogout(){
+  localStorage.removeItem('wolf_user');
+  window.location.href='login.html';
+}
+
+// Close dropdowns on outside click
+document.addEventListener('click',()=>{
+  document.getElementById('notif-panel')?.classList.remove('open');
+  document.getElementById('avatar-menu')?.classList.remove('open');
+});
+
 async function pollIpnData(){
   document.querySelectorAll('.aff-card').forEach(async card=>{
     const tok=card.dataset.ipntoken;if(!tok)return;
@@ -2861,11 +3007,15 @@ async function pollIpnData(){
       card.dataset.last_ipn_check=Date.now();
       // Auto-render with updated IPN data — no button click needed
       renderAffStats(card);saveState();
-      // Brief flash for truly new sales
-      const newSales=newN.filter(n=>n.type==='sale').length;
-      if(newSales>0){
+      // Brief flash + notification for truly new sales
+      const newSaleN=newN.filter(n=>n.type==='sale');
+      const newRefN=newN.filter(n=>n.type==='refund');
+      const platform=card.dataset.platform||'';
+      newSaleN.forEach(n=>addNotification({type:'sale',platform,product:n.product||'—',amount:n.amount||0,source:'affiliate'}));
+      newRefN.forEach(n=>addNotification({type:'refund',platform,product:n.product||'—',amount:n.amount||0,source:'affiliate'}));
+      if(newSaleN.length>0){
         const notify=document.getElementById('aff-ipn-notify-'+card.dataset.id);
-        if(notify){notify.textContent=`🔔 ${newSales} new sale${newSales>1?'s':''} received via postback`;notify.style.display='block';setTimeout(()=>notify.style.display='none',8000);}
+        if(notify){notify.textContent=`🔔 ${newSaleN.length} new sale${newSaleN.length>1?'s':''} received via postback`;notify.style.display='block';setTimeout(()=>notify.style.display='none',8000);}
       }
     }catch{}
   });
@@ -2918,7 +3068,7 @@ function setupDragReorder(){
 /* ══════════════════════════════════════════
    BOOT
 ══════════════════════════════════════════ */
-window.addEventListener('DOMContentLoaded',()=>{restoreAll();setupDragReorder();setInterval(pollIpnData,5*60*1000);});
+window.addEventListener('DOMContentLoaded',()=>{restoreAll();setupDragReorder();setInterval(pollIpnData,5*60*1000);renderNotifBadge();renderNotifList();});
 </script>
 </body>
 </html>
