@@ -1153,6 +1153,14 @@ async function callProxy(payload){
   if(!d.success)throw new Error(d.error||'Proxy error');
   return d;
 }
+/* Non-throwing variant used by affiliate flows — returns {success,error,...} */
+async function proxyPost(payload){
+  try{
+    const r=await fetch('/api/proxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!r.ok)return{success:false,error:`HTTP ${r.status}`};
+    return await r.json();
+  }catch(e){return{success:false,error:e.message};}
+}
 
 async function apiFetchOffers(plat,creds){
   try{
