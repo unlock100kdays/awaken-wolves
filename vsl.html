@@ -2670,7 +2670,8 @@ function createAffCard(name,platform,raw,csvData,col,id,ipnToken,dateRange,fromR
         <div class="ipn-url-label">Postback / IPN URL — paste into your platform settings</div>
         <div class="ipn-url-box">${escHtml(pbUrl)}</div>
         <button class="copy-btn" onclick="navigator.clipboard.writeText('${pbUrl.replace(/'/g,"\\'")}').then(()=>{this.textContent='✓ Copied!';setTimeout(()=>this.textContent='📋 Copy URL',1600)})">📋 Copy URL</button>
-        <div style="font-size:.48rem;color:rgba(120,160,255,.3);margin-top:4px;line-height:1.5">JVZoo affiliate: Account → My Account → IPN URL &nbsp;·&nbsp; Explodely: Affiliate Settings → ISN URL &nbsp;·&nbsp; Historical data via Import CSV above.</div>
+        <div style="font-size:.48rem;color:rgba(120,160,255,.3);margin-top:4px;line-height:1.5">JVZoo affiliate: Account → My Account → IPN URL &nbsp;·&nbsp; Explodely: Affiliate Settings → ISN URL</div>
+        <div id="ipn-status-${cid}" style="font-size:.46rem;color:rgba(100,180,100,.35);margin-top:3px"></div>
       </div>
     </div>`;
 
@@ -2983,7 +2984,11 @@ async function pollIpnData(){
       const r=await fetch('/api/ipn/'+tok,{signal:AbortSignal.timeout(8000)});
       if(!r.ok)return;
       const d=await r.json();
-      if(!d.success||d.kv_missing||!d.notifications?.length)return;
+      // Update status line regardless — so user knows polling is alive
+      const statusEl=document.getElementById('ipn-status-'+card.dataset.id);
+      if(d.kv_missing){if(statusEl)statusEl.textContent='⚠ KV store not bound — contact support';return;}
+      if(statusEl)statusEl.textContent=`Last checked: ${new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})} · ${d.notifications?.length||0} stored postbacks`;
+      if(!d.success||!d.notifications?.length)return;
       const all=d.notifications;
       // Aggregate ALL stored notifications into live stats
       const saleTxns=all.filter(n=>n.type==='sale');

@@ -50,7 +50,9 @@ export async function onRequest({ request, params, env }) {
       }
     } catch { /* ignore parse errors */ }
 
-    const txnId = data.transaction_id || data.orderid || data.jvzooref || data.ref
+    const txnId = data.ctransactionid   // JVZoo
+                || data.transaction_id
+                || data.orderid || data.jvzooref || data.ref
                 || data.receipt || data.cbreceipt || data.tid
                 || Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
@@ -58,11 +60,20 @@ export async function onRequest({ request, params, env }) {
       received_at: Date.now(),
       platform: guessPlatform(data),
       type: guessType(data),
-      amount: parseFloat(data.amount || data.sale_amount || data.order_total || data.affiliate_earnings || 0) || 0,
-      product: data.productname || data.product_name || data.item_name || data.cbitems || '',
+      // JVZoo affiliate commission → camount / ctransamount; fallback to generic fields
+      amount: parseFloat(
+        data.camount || data.ctransamount ||          // JVZoo
+        data.amount || data.sale_amount ||
+        data.order_total || data.affiliate_earnings || 0
+      ) || 0,
+      // JVZoo product title → cprodtitle
+      product: data.cprodtitle || data.productname || data.product_name || data.item_name || data.cbitems || '',
       txn_id: txnId,
       raw: data,
     };
+
+    // Ignore JVZoo test pings — they confirm connectivity but aren't real sales
+    if (normalized.type === 'test') return new Response('OK', { status: 200 });
 
     // Store with 1-year TTL; key = token:txnId (colon-separated prefix for listing)
     await kv.put(`${token}:${txnId}`, JSON.stringify(normalized), {
@@ -92,15 +103,18 @@ export async function onRequest({ request, params, env }) {
 }
 
 function guessPlatform(d) {
-  if (d.jvzipn || d.jvzooref || d.affiliate_earnings !== undefined) return 'JVZoo';
+  // JVZoo sends cjvzipn or ctransaffiliate
+  if (d.cjvzipn || d.jvzipn || d.ctransaffiliate !== undefined || d.ctransactionid) return 'JVZoo';
   if (d.cbreceipt || d.receipt || d.cbitems) return 'ClickBank';
-  if (d.saletimestamp || d.productId !== undefined) return 'Explodely';
+  if (d.saletimestamp || (d.productId !== undefined && !d.ctransactionid)) return 'Explodely';
   return 'Unknown';
 }
 
 function guessType(d) {
-  const raw = (d.type || d.ctype || d.ctransaction || d.ipntype || d.refundtype || '').toString().toLowerCase();
-  if (raw === '2' || raw.includes('refund')) return 'refund';
+  // JVZoo uses ctransaction = "SALE", "REFUND", "TEST"
+  const raw = (d.ctransaction || d.type || d.ctype || d.ipntype || d.refundtype || '').toString().toLowerCase();
+  if (raw === 'test') return 'test';
+  if (raw === '2' || raw === 'refund' || raw.includes('refund')) return 'refund';
   if (raw === '3' || raw.includes('chargeback') || raw.includes('dispute')) return 'chargeback';
   return 'sale';
 }
