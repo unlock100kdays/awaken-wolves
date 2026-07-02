@@ -1,19 +1,11 @@
 /**
  * Cloudflare Pages Function — IPN / Postback Receiver
- * Route: /api/ipn/:token  (Cloudflare dynamic segment)
+ * Route: /api/ipn/:token
  *
- * GET  → return stored notifications for this token (frontend polls every 5 min)
- * POST → receive IPN/postback from JVZoo, Explodely, ClickBank, etc. and store in KV
- *
- * KV SETUP (one-time, ~1 minute):
- *   1. Cloudflare Dashboard → Workers & Pages → KV → Create namespace "bizops_ipn"
- *   2. Pages → awaken-wolves → Settings → Functions → KV namespace bindings
- *   3. Add: Variable name = IPN_KV, Namespace = bizops_ipn
- *   4. Redeploy (push any change to main)
- *
- * Without KV, POST returns 200 OK (won't crash platforms) but data isn't stored.
- * GET returns { success: true, notifications: [], kv_missing: true } so the
- * frontend knows to skip the update silently.
+ * POST → Explodely, ClickBank, classic JVZoo IPN (form/JSON body)
+ * GET  → two cases:
+ *   (a) Has sale params in query string → JVZoo S2S Postback (store the sale)
+ *   (b) No sale params → frontend poll (return stored notifications)
  */
 
 const CORS = {
@@ -35,9 +27,9 @@ export async function onRequest({ request, params, env }) {
 
   const kv = env.IPN_KV ?? null;
 
-  /* ── POST: receive IPN/postback ── */
+  /* ── POST: Explodely / ClickBank / classic JVZoo IPN ── */
   if (request.method === 'POST') {
-    if (!kv) return new Response('OK', { status: 200 }); // KV not set up yet — silently accept
+    if (!kv) return new Response('OK', { status: 200 });
 
     let data = {};
     const ct = request.headers.get('content-type') || '';
@@ -50,41 +42,28 @@ export async function onRequest({ request, params, env }) {
       }
     } catch { /* ignore parse errors */ }
 
-    const txnId = data.ctransactionid   // JVZoo
-                || data.transaction_id
-                || data.orderid || data.jvzooref || data.ref
-                || data.receipt || data.cbreceipt || data.tid
-                || Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-
-    const normalized = {
-      received_at: Date.now(),
-      platform: guessPlatform(data),
-      type: guessType(data),
-      // JVZoo affiliate commission → camount / ctransamount; fallback to generic fields
-      amount: parseFloat(
-        data.camount || data.ctransamount ||          // JVZoo
-        data.amount || data.sale_amount ||
-        data.order_total || data.affiliate_earnings || 0
-      ) || 0,
-      // JVZoo product title → cprodtitle
-      product: data.cprodtitle || data.productname || data.product_name || data.item_name || data.cbitems || '',
-      txn_id: txnId,
-      raw: data,
-    };
-
-    // Ignore JVZoo test pings — they confirm connectivity but aren't real sales
-    if (normalized.type === 'test') return new Response('OK', { status: 200 });
-
-    // Store with 1-year TTL; key = token:txnId (colon-separated prefix for listing)
-    await kv.put(`${token}:${txnId}`, JSON.stringify(normalized), {
-      expirationTtl: 365 * 24 * 3600,
-    });
-
-    return new Response('OK', { status: 200 });
+    return await storePostback(kv, token, data);
   }
 
-  /* ── GET: retrieve stored notifications ── */
+  /* ── GET: JVZoo S2S postback OR frontend poll ── */
   if (request.method === 'GET') {
+    const url = new URL(request.url);
+    const qp = Object.fromEntries(url.searchParams);
+
+    // JVZoo S2S sends GET with sale data as query params
+    // Detect by presence of any sale-related field
+    const isSalePostback = !!(
+      qp.tid || qp.transaction_id || qp.ctransactionid ||
+      qp.orderid || qp.camount || qp.amount || qp.sale_amount ||
+      qp.cjvzipn || qp.ctransaction || qp.cprodtitle
+    );
+
+    if (isSalePostback) {
+      if (!kv) return new Response('OK', { status: 200 });
+      return await storePostback(kv, token, qp);
+    }
+
+    // No sale params → frontend poll: return stored notifications
     if (!kv) {
       return json({ success: true, notifications: [], kv_missing: true });
     }
@@ -95,23 +74,51 @@ export async function onRequest({ request, params, env }) {
     ).filter(Boolean);
 
     notifications.sort((a, b) => b.received_at - a.received_at);
-
     return json({ success: true, notifications });
   }
 
   return new Response('Method not allowed', { status: 405 });
 }
 
+async function storePostback(kv, token, data) {
+  const txnId = data.ctransactionid || data.transaction_id
+              || data.tid || data.orderid || data.jvzooref
+              || data.ref || data.receipt || data.cbreceipt
+              || Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+  const normalized = {
+    received_at: Date.now(),
+    platform: guessPlatform(data),
+    type: guessType(data),
+    amount: parseFloat(
+      data.camount || data.ctransamount ||   // JVZoo IPN
+      data.amount  || data.sale_amount  ||   // generic / Explodely
+      data.order_total || data.affiliate_earnings || 0
+    ) || 0,
+    product: data.cprodtitle || data.productname || data.product_name
+           || data.product   || data.item_name  || data.cbitems || '',
+    txn_id: txnId,
+    raw: data,
+  };
+
+  // Ignore JVZoo test pings
+  if (normalized.type === 'test') return new Response('OK', { status: 200 });
+
+  await kv.put(`${token}:${txnId}`, JSON.stringify(normalized), {
+    expirationTtl: 365 * 24 * 3600,
+  });
+
+  return new Response('OK', { status: 200 });
+}
+
 function guessPlatform(d) {
-  // JVZoo sends cjvzipn or ctransaffiliate
-  if (d.cjvzipn || d.jvzipn || d.ctransaffiliate !== undefined || d.ctransactionid) return 'JVZoo';
+  if (d.cjvzipn || d.jvzipn || d.ctransaffiliate !== undefined || d.ctransactionid || d.cprodtitle) return 'JVZoo';
   if (d.cbreceipt || d.receipt || d.cbitems) return 'ClickBank';
   if (d.saletimestamp || (d.productId !== undefined && !d.ctransactionid)) return 'Explodely';
   return 'Unknown';
 }
 
 function guessType(d) {
-  // JVZoo uses ctransaction = "SALE", "REFUND", "TEST"
   const raw = (d.ctransaction || d.type || d.ctype || d.ipntype || d.refundtype || '').toString().toLowerCase();
   if (raw === 'test') return 'test';
   if (raw === '2' || raw === 'refund' || raw.includes('refund')) return 'refund';
