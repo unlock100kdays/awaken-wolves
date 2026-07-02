@@ -969,7 +969,7 @@ function saveState(){
       state[col].under.push({id:c.dataset.id,name:c.dataset.name,pm:c.dataset.pm,vsl:c.dataset.vsl,script:c.dataset.script,deadline:c.dataset.deadline,checklist:cl});
     });
     document.querySelectorAll(`#list-aff-${col} .aff-card`).forEach(c=>{
-      state[col].aff.push({id:c.dataset.id,name:c.dataset.name,platform:c.dataset.platform,ipntoken:c.dataset.ipntoken,dateRange:c.dataset.daterange||'thismonth',raw:JSON.parse(c.dataset.raw||'null'),csv:JSON.parse(c.dataset.csv||'null'),ipn:JSON.parse(c.dataset.ipn||'null')});
+      state[col].aff.push({id:c.dataset.id,name:c.dataset.name,platform:c.dataset.platform,ipntoken:c.dataset.ipntoken,dateRange:c.dataset.daterange||'thismonth',raw:JSON.parse(c.dataset.raw||'null'),csv:JSON.parse(c.dataset.csv||'null'),ipn:JSON.parse(c.dataset.ipn||'null'),csv_rows:JSON.parse(c.dataset.csv_rows||'[]')});
     });
   });
   localStorage.setItem(S_KEY,JSON.stringify(state));
@@ -997,7 +997,7 @@ function restoreAll(){
       }
       if(state[col]?.aff?.length){
         document.getElementById(`list-aff-${col}`).innerHTML='';
-        state[col].aff.forEach(a=>createAffCard(a.name,a.platform,a.raw,a.csv,col,a.id,a.ipntoken,a.dateRange,true,a.ipn));
+        state[col].aff.forEach(a=>createAffCard(a.name,a.platform,a.raw,a.csv,col,a.id,a.ipntoken,a.dateRange,true,a.ipn,a.csv_rows));
       }
     });
   }
@@ -2328,7 +2328,7 @@ function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').
 /* ══════════════════════════════════════════
    AFFILIATE OPS
 ══════════════════════════════════════════ */
-let MAC='bizops', MAPlat=null, MAAffName='', MAAffCsvData=null;
+let MAC='bizops', MAPlat=null, MAAffName='', MAAffCsvData=null, MAAffCsvRows=null;
 
 function showAffStep(id){
   ['aff-step-plat','aff-step-creds','aff-step-csv','aff-step-loading'].forEach(s=>{
@@ -2403,7 +2403,7 @@ async function finalizeAffConnect(){
   if(creds&&MAPlat){
     try{msg.textContent=`Pulling ${MAPlat} data…`;raw=await fetchAffApiData(MAPlat,creds,'thismonth');}catch(e){raw=null;}
   }
-  createAffCard(MAAffName,MAPlat||'Other',raw,MAAffCsvData,MAC,uid(),genIpnToken(),'thismonth',false);
+  createAffCard(MAAffName,MAPlat||'Other',raw,MAAffCsvData,MAC,uid(),genIpnToken(),'thismonth',false,null,MAAffCsvRows);
   closeModal('modal-affiliate');
 }
 
@@ -2488,7 +2488,7 @@ function aggregateExplAffiliate(sales){
 }
 
 /* ── CSV IMPORT ── */
-let csvParsed=null,csvTargetCardId=null;
+let csvParsed=null,csvParsedRows=null,csvTargetCardId=null;
 
 function parseCsv(text){
   const lines=text.trim().split(/\r?\n/);if(lines.length<2)return null;
@@ -2561,6 +2561,49 @@ function aggCsvRows(rows,map){
     csv_recent:recent,imported_at:Date.now(),
   };
 }
+/* Extract compact rows [amt,type,pn,ds,ts] from raw CSV rows for merge storage */
+function extractCsvRows(rows,map){
+  const out=[];
+  for(const row of rows){
+    const ra=map.amount>=0?(row[map.amount]||'0'):'0';
+    const amt=parseFloat(ra.replace(/[^0-9.\-]/g,''))||0;
+    const rt=map.type>=0?(row[map.type]||'').toLowerCase().trim():'';
+    if(rt==='n/a')continue;
+    const isRef=rt==='refund'||rt.includes('refund')||(rt===''&&amt<0);
+    const isCB=rt.includes('chargeback')||rt.includes('charge')||rt.includes('dispute');
+    const type=isCB?'chargeback':isRef?'refund':'sale';
+    const absAmt=Math.abs(amt);
+    const pn=map.product>=0?(row[map.product]||'—').trim():'—';
+    const ds=map.date>=0?(row[map.date]||'').trim():'';
+    let ts=0;
+    if(ds){
+      let d=new Date(ds);
+      if(isNaN(d)&&/^\d{2}-\d{2}-\d{4}/.test(ds)){const[dd,mm,yyyy]=ds.split(/[-\/]/);d=new Date(`${yyyy}-${mm}-${dd}`);}
+      if(!isNaN(d))ts=Math.floor(d.getTime()/1000);
+    }
+    out.push([absAmt,type,pn,ds,ts]);
+  }
+  return out;
+}
+/* Fingerprint for dedup: timestamp-or-datestring | amount | product | type */
+function fpRow(r){return`${r[4]||r[3]}|${r[0]}|${r[2]}|${r[1]}`;}
+/* Re-aggregate from compact stored rows (sorted newest-first for recent list) */
+function aggFromStoredRows(storedRows){
+  let grossComm=0,refundAmt=0,cnt=0,refs=0,cbs=0;
+  const pm={};const recent=[];
+  const sorted=[...storedRows].sort((a,b)=>b[4]-a[4]);
+  for(const r of sorted){
+    const[absAmt,type,pn,ds,ts]=r;
+    if(!pm[pn])pm[pn]={name:pn,commission:0,sales:0,refunds:0,refundAmt:0};
+    const p=pm[pn];
+    if(type==='sale'){grossComm+=absAmt;cnt++;p.commission+=absAmt;p.sales++;}
+    else if(type==='refund'){refundAmt+=absAmt;refs++;p.refunds++;p.refundAmt+=absAmt;p.commission-=absAmt;}
+    else if(type==='chargeback'){refundAmt+=absAmt;cbs++;}
+    if(recent.length<30)recent.push({date:ts?new Date(ts*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short'}):ds||'-',type,amount:absAmt,product:pn});
+  }
+  const netComm=grossComm-refundAmt;
+  return{csv_sales:cnt,csv_commission:grossComm,csv_refunds:refs,csv_chargebacks:cbs,csv_refund_amt:refundAmt,csv_net:netComm,csv_refund_rate:cnt>0?(refs/cnt*100):0,csv_refund_dollar_rate:grossComm>0?(refundAmt/grossComm*100):0,csv_products:Object.values(pm).sort((a,b)=>b.commission-a.commission).slice(0,25),csv_recent:recent,imported_at:Date.now()};
+}
 function showCsvPreview(agg,rows,elId){
   document.getElementById(elId).innerHTML=`<div style="background:rgba(0,80,180,.06);border:1px solid rgba(0,80,180,.2);border-radius:4px;padding:8px 10px"><div style="font-size:.58rem;color:#22aaff;font-weight:700;margin-bottom:4px">✓ ${rows} rows parsed</div><div style="font-size:.6rem;color:var(--silver)">Sales: <b style="color:#e0e0e0">${agg.csv_sales}</b> &nbsp;·&nbsp; Commission: <b style="color:#22aaff">${fmt(agg.csv_commission)}</b> &nbsp;·&nbsp; Refunds: <b style="color:#ee2200">${agg.csv_refunds}</b></div></div>`;
 }
@@ -2592,11 +2635,13 @@ function processAffCsv(file){
     if(err){document.getElementById('aff-csv-preview').innerHTML=`<div style="color:#ee2200;font-size:.65rem">${err}</div>`;return;}
     const p=parseCsv(text);
     if(!p||!p.rows.length){document.getElementById('aff-csv-preview').innerHTML='<div style="color:#ee2200;font-size:.65rem">Could not parse file — check it has headers.</div>';return;}
-    MAAffCsvData=aggCsvRows(p.rows,guessCsvMap(p.headers));
+    const maMap=guessCsvMap(p.headers);
+    MAAffCsvRows=extractCsvRows(p.rows,maMap);
+    MAAffCsvData=aggCsvRows(p.rows,maMap);
     showCsvPreview(MAAffCsvData,p.rows.length,'aff-csv-preview');
   });
 }
-function openCsvImport(cardId){csvTargetCardId=cardId;csvParsed=null;document.getElementById('csv-preview-main').innerHTML='';document.getElementById('btn-csv-apply').disabled=true;document.getElementById('modal-csv').classList.add('open');}
+function openCsvImport(cardId){csvTargetCardId=cardId;csvParsed=null;csvParsedRows=null;document.getElementById('csv-preview-main').innerHTML='';document.getElementById('btn-csv-apply').disabled=true;document.getElementById('modal-csv').classList.add('open');}
 function handleCsvDrop(e){e.preventDefault();document.getElementById('csv-drop-main').classList.remove('drag-over');const f=e.dataTransfer.files[0];if(f)processCsvMain(f);}
 function handleCsvFileMain(i){if(i.files[0])processCsvMain(i.files[0]);}
 function processCsvMain(file){
@@ -2604,17 +2649,27 @@ function processCsvMain(file){
     if(err){document.getElementById('csv-preview-main').innerHTML=`<div style="color:#ee2200;font-size:.65rem">${err}</div>`;return;}
     const p=parseCsv(text);
     if(!p||!p.rows.length){document.getElementById('csv-preview-main').innerHTML='<div style="color:#ee2200;font-size:.65rem">Could not parse file — check it has headers.</div>';return;}
-    csvParsed=aggCsvRows(p.rows,guessCsvMap(p.headers));
+    const map=guessCsvMap(p.headers);
+    csvParsedRows=extractCsvRows(p.rows,map);
+    csvParsed=aggCsvRows(p.rows,map);
     showCsvPreview(csvParsed,p.rows.length,'csv-preview-main');
     document.getElementById('btn-csv-apply').disabled=false;
   });
 }
 function applyMainCsv(){
-  if(!csvParsed||!csvTargetCardId)return;
+  if(!csvParsedRows||!csvParsedRows.length||!csvTargetCardId)return;
   const card=document.querySelector(`.aff-card[data-id="${csvTargetCardId}"]`);
   if(!card)return;
-  try{localStorage.setItem('aff_csv::'+csvTargetCardId,JSON.stringify(csvParsed));}catch{}
-  card.dataset.csv=JSON.stringify(csvParsed);
+  /* Merge new rows with existing stored rows — deduplicate by fingerprint */
+  const existing=JSON.parse(card.dataset.csv_rows||'[]');
+  const seen=new Set(existing.map(fpRow));
+  const merged=[...existing];
+  let added=0;
+  for(const r of csvParsedRows){const fp=fpRow(r);if(!seen.has(fp)){merged.push(r);seen.add(fp);added++;}}
+  const agg=aggFromStoredRows(merged);
+  card.dataset.csv_rows=JSON.stringify(merged);
+  card.dataset.csv=JSON.stringify(agg);
+  try{localStorage.setItem('aff_csv::'+csvTargetCardId,JSON.stringify(agg));}catch{}
   closeModal('modal-csv');renderAffStats(card);saveState();
 }
 
@@ -2625,7 +2680,7 @@ function genIpnToken(){
 }
 function getPostbackUrl(tok){return location.origin+'/api/ipn/'+tok;}
 
-function createAffCard(name,platform,raw,csvData,col,id,ipnToken,dateRange,fromRestore,ipnData){
+function createAffCard(name,platform,raw,csvData,col,id,ipnToken,dateRange,fromRestore,ipnData,csvRows){
   const list=document.getElementById('list-aff-'+col);
   const emp=list.querySelector('.empty-state');if(emp)emp.remove();
   const card=document.createElement('div');
@@ -2638,6 +2693,7 @@ function createAffCard(name,platform,raw,csvData,col,id,ipnToken,dateRange,fromR
   card.dataset.raw=JSON.stringify(raw||null);
   card.dataset.csv=JSON.stringify(csvData||null);
   card.dataset.ipn=JSON.stringify(ipnData||null);
+  card.dataset.csv_rows=JSON.stringify(csvRows||[]);
 
   const PCLR={JVzoo:'#0077cc',Explodely:'#ff5500',Clickbank:'#00aa44',Digistore:'#cc7700',Other:'#888'};
   const pc=PCLR[platform]||'#888';
